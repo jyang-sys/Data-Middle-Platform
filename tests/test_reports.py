@@ -123,6 +123,19 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(models['公共型号'], 2)
         self.assertEqual(models['专用型号'], 2)
 
+    def test_native_product_link_uses_catalog_and_ids_not_sku_guess(self):
+        with main.database() as db:
+            db.execute("INSERT INTO base_products VALUES(88,99,0,'PRODUCT-SKU','来源产品','{}','now',1)")
+        self.seed([order(9, sku='OLD-SKU', products=[{'sku':'OLD-SKU', 'quantity':2, 'storage':'db', 'storage_id':88, 'product_id':99}]),
+                   order(10, order_source='ebay', products=[{'sku':'OTHER-SKU', 'quantity':3, 'storage':'db', 'storage_id':88, 'product_id':99}])])
+        result = self.report(granularity='source_product')
+        row = next(r for r in result['monthly'] if r['key'] == ['source','88','99'])
+        self.assertEqual(row['total'], 5)
+        self.assertIn('来源产品', row['label'])
+        detail = self.client.get('/api/reports/details', params={**self.params, 'granularity':'source_product', 'key_json':json.dumps(row['key'])}).json()
+        self.assertEqual(detail['total_units'], 5)
+        self.assertEqual(detail['lines'][0]['parent_sku'], 'PRODUCT-SKU')
+
     def test_mapping_conflict_audit_and_idempotence(self):
         result = self.client.put('/api/reports/mappings', json={'source_sku': 'A', 'model': '错误', 'expected_version': 0, 'actor': '验收'})
         self.assertEqual(result.status_code, 409)
@@ -177,7 +190,7 @@ class ReportTests(unittest.TestCase):
             rows = list(wb[name].values)[1:]
             self.assertEqual(sum(r[3] for r in rows), 15)
             self.assertEqual(len([r for r in rows if 'A · B' in r[:3]]), 2)
-        self.assertEqual(sum(r[-1] for r in list(wb['订单明细'].values)[1:]), 15)
+        self.assertEqual(sum(r[12] for r in list(wb['订单明细'].values)[1:]), 15)
         self.assertEqual(wb['全平台每日销量'].cell(33, 4).value, 15)
         cells = [c for sheet in wb for row in sheet for c in row if c.value == '=1+1']
         self.assertTrue(cells)

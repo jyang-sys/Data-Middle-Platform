@@ -132,7 +132,7 @@ class ReportFilters(BaseModel):
     model: str | None = None
     source_sku: str | None = None
     product_type: str | None = None
-    granularity: str = Field(default='specification', pattern='^(model|specification)$')
+    granularity: str = Field(default='specification', pattern='^(model|specification|source_product)$')
 
     @model_validator(mode='after')
     def validate_range(self):
@@ -196,8 +196,9 @@ def report_lines(filters):
             a.extra_json,s.name AS shop_name FROM base_orders o LEFT JOIN order_annotations a
             ON a.order_id=o.order_id LEFT JOIN base_shops s ON s.platform=o.platform AND s.shop_id=o.shop_id''').fetchall()
         items = defaultdict(list)
-        for row in db.execute('SELECT order_id,position,sku,quantity FROM base_order_items'):
+        for row in db.execute('SELECT order_id,position,sku,quantity,storage,storage_id,product_id,variant_id,raw_json FROM base_order_items'):
             items[row['order_id']].append(dict(row))
+        products = {(str(r['inventory_id']), str(r['product_id'])): dict(r) for r in db.execute('SELECT inventory_id,product_id,parent_id,sku,name FROM base_products')}
         sync = db.execute("SELECT finished_at FROM base_sync_jobs WHERE domain='orders' AND status='success' ORDER BY started_at DESC LIMIT 1").fetchone()
     diagnostics = {'missing_date_orders': 0, 'excluded_return_orders': 0, 'excluded_marked_orders': 0,
                    'invalid_quantity_lines': 0, 'unmapped_lines': 0, 'orders_without_items': 0}
@@ -240,6 +241,12 @@ def report_lines(filters):
             except (InvalidOperation, ValueError, TypeError):
                 diagnostics['invalid_quantity_lines'] += 1
                 continue
+            product_id = item['variant_id'] if item['variant_id'] not in (None, '', '0') else item['product_id']
+            product = products.get((item['storage_id'], product_id)) if item['storage'] == 'db' else None
+            if product and product_id != item['product_id'] and str(product['parent_id']) != item['product_id']:
+                product = None
+            source_name = str((product['name'] if product and product['name'] not in ('', 'None') else json.loads(item['raw_json']).get('name', '')) or item['sku'] or '未提供名称')
+            parent = products.get((item['storage_id'], str(product['parent_id']))) if product and product['parent_id'] else product
             mapping = mappings.get((order['platform'], item['sku'])) or mappings.get(('*', item['sku']))
             if mapping:
                 model = mapping['model']
@@ -252,6 +259,8 @@ def report_lines(filters):
                 specification = color = ''
                 product_type = '未分类'
                 label = model
+            if filters.granularity == 'source_product':
+                label = source_name + ' · ' + (item['sku'] or '无 SKU')
             if filters.model is not None and model != filters.model:
                 continue
             if filters.product_type is not None and product_type != filters.product_type:
@@ -260,13 +269,16 @@ def report_lines(filters):
                 diagnostics['unmapped_lines'] += 1
             # Tuple keys prevent collisions between different configurations with the same label.
             key = (model,) if filters.granularity == 'model' else (model, specification, color)
+            if filters.granularity == 'source_product':
+                key = ('source', str(product['inventory_id']), str(product['product_id'])) if product else ('unlinked', order['platform'], item['sku'] or f"{order['order_id']}:{item['position']}")
             lines.append({'order_id': order['order_id'], 'external_order_id': order['external_order_id'],
                 'position': item['position'], 'date': day.isoformat(), 'month': day.strftime('%Y-%m'),
                 'platform': order['platform'], 'platform_name': platform_name(order['platform']),
                 'shop_id': order['shop_id'], 'shop_name': order['shop_name'] or order['shop_id'],
                 'employee_id': order['employee_id'], 'group_id': order['group_id'],
                 'sales_owner': order['sales_owner'], 'business_group': order['business_group'],
-                'source_sku': item['sku'], 'model': model, 'specification': specification, 'color': color,
+                'source_sku': item['sku'], 'source_name': source_name, 'parent_sku': parent['sku'] if parent else None,
+                'inventory_id': product['inventory_id'] if product else None, 'product_id': product['product_id'] if product else None, 'model': model, 'specification': specification, 'color': color,
                 'product_type': product_type, 'label': label, 'quantity': int(quantity), 'mapped': mapping is not None,
                 'key': key})
     return lines, diagnostics, sync['finished_at'] if sync else None
@@ -313,7 +325,7 @@ def aggregate(filters):
     warnings.append('日期采用 Base 创建时间，尚未认定为平台原始下单时间。' if filters.date_basis == 'base_created'
                     else '日期采用订单本地附加字段 platform_order_date，未填写或格式无效的订单不计入。')
     if diagnostics['unmapped_lines']:
-        warnings.append('未映射商品保留原 SKU 单独汇总，不猜测型号或拆分合并配置。')
+        warnings.append('业务规格尚未映射；系统产品按明确的目录/产品 ID 汇总，不认定为统一业务规格。' if filters.granularity == 'source_product' else '未映射商品保留原 SKU 单独汇总，不猜测型号或拆分合并配置。')
     unmapped = {}
     for row in lines:
         if not row['mapped']:
@@ -361,9 +373,11 @@ def options():
         platforms = [row[0] for row in db.execute('SELECT DISTINCT platform FROM base_orders ORDER BY platform')]
         statuses = [row[0] for row in db.execute('SELECT DISTINCT status_id FROM base_orders WHERE status_id IS NOT NULL ORDER BY status_id')]
         products = [dict(r) for r in db.execute('''SELECT DISTINCT model,product_type FROM sales_sku_mappings ORDER BY model''')]
+        quality = dict(db.execute("SELECT COUNT(*) AS tagged_test_products FROM base_products WHERE UPPER(sku) LIKE 'DEMO-%' OR UPPER(sku) LIKE 'SHOWCASE-%' OR UPPER(sku) LIKE 'TEST-%'").fetchone())
+        bounds = dict(db.execute('SELECT MIN(created_at) AS first_created,MAX(created_at) AS last_created,MAX(CASE WHEN confirmed=1 THEN created_at END) AS last_confirmed_created FROM base_orders WHERE created_at>0').fetchone())
         shops = [dict(r) for r in db.execute('SELECT platform,shop_id,name FROM base_shops ORDER BY platform,shop_id')]
     return {'platforms': [{'id': p, 'name': platform_name(p)} for p in platforms], 'statuses': statuses,
-            'products': products, 'shops': shops}
+            'products': products, 'shops': shops, 'order_dates': bounds, 'source_quality': quality}
 
 
 def append_row(sheet, values):
@@ -412,9 +426,9 @@ def export(filters: Annotated[ReportFilters, Depends(report_filters)]):
     fields = ['date', 'order_id', 'external_order_id', 'platform_name', 'shop_name', 'sales_owner',
               'business_group', 'source_sku', 'model', 'specification', 'color', 'product_type', 'quantity']
     append_row(sheet, ['订单日期', 'Base 订单 ID', '平台订单号', '平台', '店铺', '销售负责人', '业务小组',
-                       '原 SKU', '型号', '配置', '颜色', '产品类型', '销量'])
+                       '原 SKU', '型号', '配置', '颜色', '产品类型', '销量', '来源产品名称', '父 SKU', '目录 ID', '产品 ID'])
     for row in sorted(lines, key=lambda r: (r['date'], r['order_id'], r['position'])):
-        append_row(sheet, [row[field] for field in fields])
+        append_row(sheet, [*[row[field] for field in fields], row['source_name'], row['parent_sku'], row['inventory_id'], row['product_id']])
     sheet = wb.create_sheet('口径说明')
     append_row(sheet, ['项目', '取值'])
     for key, value in report['filters'].items():

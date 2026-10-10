@@ -313,3 +313,5 @@ app.include_router(management_router)
 
 from app.reports import router as reports_router
 app.include_router(reports_router)
+from app.stock_dashboard import router as stock_dashboard_router
+app.include_router(stock_dashboard_router)
