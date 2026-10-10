@@ -37,10 +37,7 @@ async function loadReportOptions() {
   options.platforms.forEach(p => $('mapping-platform').append(new Option(p.name, p.id)));
   if ([...$('mapping-platform').options].some(o => o.value === old)) $('mapping-platform').value = old;
   reportState.orderDates = options.order_dates;
-  $('report-source-quality').textContent = options.source_quality.tagged_test_products ? '当前读取已配置的 Base 账号；来源含 DEMO / SHOWCASE / TEST 标识产品，未自动剔除。请核对正式业务范围。' : '';
   reportState.lastCreated = options.order_dates.last_confirmed_created || options.order_dates.last_created;
-  const formatDate = value => value ? new Intl.DateTimeFormat('en-CA', {timeZone: $('report-timezone').value, year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date(value * 1000)) : '未知';
-  $('report-source-range').textContent = `系统订单日期范围：${formatDate(options.order_dates.first_created)} 至 ${formatDate(options.order_dates.last_created)}。今天的近期范围可能没有订单，可查询最近有订单的 14 天。`;
   reportState.shops = options.shops; reportShopOptions();
   $('report-statuses').title = '当前来源状态 ID：' + options.statuses.join(', ');
 }
@@ -60,10 +57,6 @@ async function refreshSalesReport() {
   $('report-export').href = '/api/reports/export?' + params; $('report-export').setAttribute('aria-disabled', window.__DATA_SNAPSHOT__ ? 'true' : 'false');
   $('report-units').textContent = number(data.total_units); $('report-orders').textContent = number(data.order_count);
   $('report-lines').textContent = number(data.line_count); $('report-unmapped-count').textContent = number(data.diagnostics.unmapped_lines);
-  $('report-period').textContent = `${data.filters.start} 至 ${data.filters.end} · ${data.filters.timezone} · ${data.filters.confirmed_only ? '仅已确认' : '包含未确认'} · 最近成功订单同步：${data.last_sync ? new Date(data.last_sync).toLocaleString('zh-CN') : '尚无成功记录'}`;
-  $('report-warnings').replaceChildren(); data.warnings.forEach(message => { const li = document.createElement('li'); li.textContent = message; $('report-warnings').append(li); });
-  const d = data.diagnostics;
-  $('report-diagnostics').textContent = `符合其他筛选但缺少日期的订单 ${d.missing_date_orders} · 期间退货来源订单排除 ${d.excluded_return_orders} · 人工排除 ${d.excluded_marked_orders} · 异常数量明细 ${d.invalid_quantity_lines} · 无商品明细订单 ${d.orders_without_items}`;
   const platforms = data.platforms;
   const monthlyRows = data.monthly.map(r => [r.month, r.product_type, r.label, ...platforms.map(p => number(r.platforms[p.id] || 0)), number(r.total), '']);
   if (monthlyRows.length) monthlyRows.push(['期间合计', '', '', ...platforms.map(p => number(data.monthly.reduce((sum, r) => sum + (r.platforms[p.id] || 0), 0))), number(data.total_units), '']);
@@ -162,7 +155,6 @@ loadReportOptions().then(() => {
     if (latest < $('report-start').value) {
       const start = new Date(latest + 'T00:00:00Z'); start.setUTCDate(start.getUTCDate() - 13);
       $('report-start').value = start.toISOString().slice(0,10); $('report-end').value = latest;
-      $('report-source-range').textContent += ' 当前近期范围无来源订单，初次打开已展示最近有订单的 14 天。';
     }
   }
   return refreshSalesReport();
