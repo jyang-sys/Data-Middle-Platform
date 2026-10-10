@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>销售数据中台 · BaseLinker</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="数据中台首页"><span class="brand-mark">B</span><span>数据中台<small>SALES WORKSPACE</small></span></a>
+    <div class="nav-label">工作空间</div>
+    <button class="nav active" data-tab="dashboard">◈ <span>销售分析</span></button>
+    <button class="nav" data-tab="connection">⇄ <span>数据接入</span></button>
+    <button class="nav" data-tab="base-data">▦ <span>中台基础数据</span></button>
+    <button class="nav" data-tab="datasets">▤ <span>表格工具</span></button>
+    <div class="sidebar-bottom"><span class="dot"></span>本地开发版<small>BaseLinker · SQLite</small></div>
+  </aside>
+  <main>
+    <header><span>工作空间 <span class="slash">/</span> <span id="breadcrumb">销售分析</span></span><span class="edition">基础版 · 单用户</span></header>
+    <section id="dashboard" class="view">
+      <div class="heading"><div><div class="eyebrow">SALES OVERVIEW</div><h1>销售分析</h1><p>从平台到 SKU，让每一笔销售更清晰。</p></div><button id="sync-top" class="button primary">↻ 同步订单</button></div>
+      <div class="toolbar"><div class="filters"><label>数据来源<select id="source"><option value="baselinker">BaseLinker 真实数据</option><option value="demo">演示数据</option></select></label><label>时间范围<select id="days"><option value="7">最近 7 天</option><option value="30" selected>最近 30 天</option><option value="90">最近 90 天</option><option value="365">最近 365 天</option></select></label><label>币种<select id="currency"><option value="">自动选择</option></select></label></div><span id="last-sync" class="muted">尚未同步</span></div>
+      <div id="demo-banner" class="banner" hidden>正在查看演示数据，数字仅供体验，与真实订单分开存储。</div>
+      <div class="metrics">
+        <article class="metric"><span>商品销量</span><strong id="units">—</strong><small>订单商品数量合计</small></article>
+        <article class="metric"><span>订单总数</span><strong id="orders">—</strong><small>所选币种的已确认订单</small></article>
+        <article class="metric"><span>销售额 <em id="money-unit"></em></span><strong id="revenue">—</strong><small>商品含税金额 + 运费</small></article>
+        <article class="metric"><span>平均订单金额</span><strong id="average">—</strong><small>销售额 ÷ 订单总数</small></article>
+      </div>
+      <div id="empty-sales" class="empty panel" hidden><span class="empty-icon">↗</span><h2>连接数据，开启销售分析</h2><p>配置 BaseLinker API 令牌并同步订单，或先用演示数据体验看板。</p><div><button class="button primary" data-open="connection">配置数据接入</button><button class="button" id="demo-main">体验演示数据</button></div></div>
+      <div class="panel chart-panel"><div class="panel-heading"><h2>销售额趋势</h2><span class="muted">按订单确认日期 · UTC</span></div><div id="trend" class="trend" role="img" aria-label="每日销售额趋势"></div><p class="muted chart-note">悬停或聚焦柱状图查看每日销售额与订单数。</p></div>
+      <div class="two-columns">
+        <article class="panel"><div class="panel-heading"><h2>平台表现</h2><span class="muted">按销量排序</span></div><div id="platform-table" class="table-wrap"></div></article>
+        <article class="panel"><div class="panel-heading"><h2>店铺表现</h2><span class="muted">名称来自 BaseLinker 来源接口</span></div><div id="shop-table" class="table-wrap"></div></article>
+      </div>
+      <article class="panel"><div class="panel-heading"><h2>SKU 销量排名</h2><span class="muted">TOP 20 · 商品金额不含运费</span></div><div id="sku-table" class="table-wrap"></div></article>
+      <article class="panel"><div class="panel-heading"><h2>最近订单</h2><span class="muted">最多 20 条</span></div><div id="order-table" class="table-wrap"></div></article>
+      <p class="footnote">统计已确认订单，不自动剔除取消、退货或退款；不同币种分开统计。平台、店铺和 SKU 缺失时显示原始缺失标识。此版本用于个人开发，外网部署前需增加登录与访问控制。</p>
+    </section>
+    <section id="connection" class="view" hidden>
+      <div class="heading"><div><div class="eyebrow">DATA CONNECTION</div><h1>数据接入</h1><p>从 BaseLinker 读取订单，保留分析所需字段。</p></div></div>
+      <article class="panel connection-card"><div class="connection-icon">B</div><div><h2>BaseLinker API</h2><p>订单 → 平台 / 店铺 / SKU / 销量</p></div><span class="badge" id="connection-badge">检查配置中</span></article>
+      <article class="panel instructions"><h2>连接你的 BaseLinker</h2><ol><li>在 BaseLinker 账户的 API 设置中取得 API 令牌。请妥善保管，不要发到聊天或提交到 Git。</li><li>在云环境设置中填写密钥 <code>BASELINKER_API_TOKEN</code>，允许访问 <code>api.baselinker.com</code>，保存并应用配置。</li><li>返回这里选择时间范围，点击“同步订单”。令牌只在服务端使用。</li></ol><div class="actions"><button id="sync-connection" class="button primary">↻ 同步订单</button><button id="check-connection" class="button">检查配置</button><a class="button" href="https://api.baselinker.com/" target="_blank" rel="noopener noreferrer">API 文档 ↗</a></div><p id="connection-detail" class="muted"></p></article>
+      <article class="panel instructions"><h2>还没有令牌？先看看效果</h2><p>加载独立的演示订单，体验销售趋势、平台与店铺分布、SKU 销量排行。</p><button id="demo-connection" class="button">加载演示数据</button></article>
+    </section>
+    <section id="base-data" class="view" hidden>
+      <div class="heading"><div><div class="eyebrow">BASE DATA</div><h1>中台基础数据</h1><p>产品、库存、订单、店铺独立存储。人工维护的订单归属在同步后保留。</p></div><button class="button" id="base-refresh">刷新状态</button></div>
+      <article class="panel instructions"><h2>同步管理</h2><p id="base-status" class="muted">读取状态中</p><div class="actions"><button class="button" data-base-sync="shops">同步平台店铺</button><button class="button" data-base-sync="products">同步父子 SKU</button><button class="button" data-base-sync="inventory">同步库存</button><button class="button primary" data-base-sync="orders">同步全部订单</button></div><p class="muted">自动同步由独立同步进程执行；此处可手动补跑。任务耗时取决于账户数据量。</p><div class="table-wrap" id="base-jobs"></div></article>
+      <article class="panel"><div class="panel-heading"><h2>产品父子 SKU</h2><span class="muted">前 50 条</span></div><div class="table-wrap" id="base-products"></div></article>
+      <article class="panel"><div class="panel-heading"><h2>库存来源明细</h2><span class="muted">Base 原始数量 · 前 50 条</span></div><div class="table-wrap" id="base-inventory"></div><p class="muted">预占和供应商待入库保留原字段。缺失值表示未知；实物、虚拟、可用与平台可售口径需另行核对。</p></article>
+      <article class="panel"><div class="panel-heading"><h2>平台店铺</h2></div><div class="table-wrap" id="base-shops"></div></article>
+      <article class="panel"><div class="panel-heading"><h2>订单与业绩归属</h2><span class="muted">最新 50 条 · 包含未确认订单</span></div><div class="table-wrap" id="base-orders"></div></article>
+      <article class="panel instructions"><h2>维护订单归属</h2><form id="annotation-form"><div class="filters"><label>Base 订单 ID<input id="annotation-id" type="number" min="1" required></label><label>销售负责人<input id="annotation-owner" maxlength="200"></label><label>业务小组<input id="annotation-group" maxlength="200"></label></div><label for="annotation-extra">自定义附加字段 JSON</label><textarea id="annotation-extra" spellcheck="false">{}</textarea><div class="actions"><button type="button" id="annotation-load" class="button">读取当前归属</button><button class="button primary" type="submit">保存归属</button></div></form><p class="muted">字段只写入中台，不修改 Base 订单。保存前请先读取该订单的当前归属。</p></article>
+    </section>
+    <section id="datasets" class="view" hidden>
+      <div class="heading"><div><div class="eyebrow">TABLE WORKBENCH</div><h1>表格工具</h1><p>上传并查询 CSV / Excel。此处的表格独立于销售看板。</p></div><label class="button primary" for="upload-file">＋ 上传表格</label><input id="upload-file" type="file" accept=".csv,.xlsx" hidden></div>
+      <p class="muted">首行为表头 · 最多 10 MB、100 列、100,000 行 · Excel 读取第一个工作表</p>
+      <div id="dataset-list" class="dataset-list"></div>
+      <article class="panel"><div class="panel-heading"><h2 id="preview-title">数据预览</h2></div><div id="preview-table" class="table-wrap"><p class="muted table-empty">选择一个数据集查看内容。</p></div></article>
+      <article class="panel instructions"><h2>SQL 查询</h2><p>选择数据集后会生成查询示例。所有字段按文本导入；计算金额时可用 <code>CAST(字段 AS REAL)</code>。</p><label for="sql" class="sr-only">SQL 查询语句</label><textarea id="sql" spellcheck="false" placeholder="SELECT * FROM 数据集表名 LIMIT 50"></textarea><div class="actions"><button id="run-query" class="button primary">运行查询</button><span id="query-status" class="muted">只读查询 · 最多显示 200 行 · 3 秒超时</span></div><div id="query-table" class="table-wrap"></div></article>
+    </section>
+    <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+  </main>
+</body>
+</html>
