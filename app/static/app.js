@@ -10,6 +10,12 @@ function notice(message, error = false) {
 }
 async function api(path, options = {}) {
   let response;
+  if (window.__DATA_SNAPSHOT__) {
+    const url = new URL(path, 'http://snapshot.local'); url.searchParams.sort();
+    const key = url.pathname + (url.search ? url.search : '');
+    if ((!options.method || options.method === 'GET') && Object.hasOwn(window.__DATA_SNAPSHOT__.responses, key)) return structuredClone(window.__DATA_SNAPSHOT__.responses[key]);
+    throw new Error('当前为真实数据只读快照；修改条件、同步和保存请打开运行中的中台服务。');
+  }
   if (window.__STATIC_PREVIEW__) {
     $('preview-banner').hidden = false;
     throw new Error('当前为界面预览，未连接真实数据服务。');
@@ -31,9 +37,13 @@ async function api(path, options = {}) {
   return result;
 }
 function switchTab(id) {
+  window.scrollTo({top: 0});
   document.querySelectorAll('.view').forEach((view) => { view.hidden = view.id !== id; });
   document.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === id));
-  $('breadcrumb').textContent = {dashboard: '销售分析', connection: '数据接入', datasets: '表格工具', 'base-data': '中台基础数据', ownership: '员工与归属'}[id];
+  $('breadcrumb').textContent = {'sales-report': '销量试算报表', 'stock-dashboard': '多仓库存看板', dashboard: '旧版销售分析', connection: '数据接入', datasets: '表格工具', 'base-data': '中台基础数据', ownership: '员工与归属'}[id];
+  if (id === 'sales-report') loadReportOptions().then(() => refreshSalesReport()).catch((error) => notice(error.message, true));
+  if (id === 'stock-dashboard') initializeStockDashboard().catch(error => notice(error.message, true));
+  if (id === 'dashboard') refreshDashboard().catch((error) => notice(error.message, true));
   if (id === 'ownership') refreshManagement().catch((error) => notice(error.message, true));
   if (id === 'connection') checkConnection().catch((error) => notice(error.message, true));
   if (id === 'base-data') refreshBase().catch((error) => notice(error.message, true));
@@ -147,8 +157,7 @@ $('run-query').addEventListener('click', async () => {
   try { const data = await api('/api/query', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sql: $('sql').value})}); table('query-table', data.columns, data.rows); $('query-status').textContent = `${data.rows.length} 行 · ${data.elapsed_ms} ms${data.truncated ? ' · 已截取前 200 行' : ''}`; }
   catch (error) { notice(error.message, true); } finally { $('run-query').disabled = false; }
 });
-refreshDashboard().catch((error) => notice(error.message, true));
-checkConnection().catch((error) => notice(error.message, true));
+if (!window.__DATA_SNAPSHOT__) checkConnection().catch((error) => notice(error.message, true));
 
 async function refreshBase() {
   const [state, products, inventory, shops, orders] = await Promise.all([

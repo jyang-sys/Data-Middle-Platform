@@ -69,6 +69,8 @@ def initialize():
     initialize_storage()
     from app.management import initialize_storage as initialize_management
     initialize_management()
+    from app.reports import initialize_storage as initialize_reports
+    initialize_reports()
 
 
 @asynccontextmanager
@@ -102,7 +104,7 @@ def index():
 def root_asset(asset_name: str):
     # Relative resources work at both / and /static/index.html, as well as
     # when the HTML is opened beside its assets in a file preview.
-    if asset_name not in {"style.css", "management.css", "app.js", "management.js"}:
+    if asset_name not in {"style.css", "management.css", "app.js", "management.js", "reports.js", "reports.css", "inventory.js", "inventory.css"}:
         raise HTTPException(404, "资源不存在。")
     return FileResponse(ROOT / "static" / asset_name)
 
@@ -308,3 +310,8 @@ from app.ingestion import router as ingestion_router
 app.include_router(ingestion_router)
 from app.management import router as management_router
 app.include_router(management_router)
+
+from app.reports import router as reports_router
+app.include_router(reports_router)
+from app.stock_dashboard import router as stock_dashboard_router
+app.include_router(stock_dashboard_router)
