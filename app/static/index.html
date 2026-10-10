@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>销售数据中台 · BaseLinker</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <link rel="stylesheet" href="/static/management.css">
-  <script src="/static/app.js" defer></script>
-  <script src="/static/management.js" defer></script>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./management.css">
+  <script src="./app.js" defer></script>
+  <script src="./management.js" defer></script>
 </head>
 <body>
   <aside class="sidebar">
@@ -21,6 +21,7 @@
   </aside>
   <main>
     <header><span>工作空间 <span class="slash">/</span> <span id="breadcrumb">销售分析</span></span><span class="edition">基础版 · 单用户</span></header>
+    <div id="preview-banner" class="banner" role="status" hidden>界面预览未连接数据服务。此处可查看页面布局；真实数据查询与维护需通过已启动的中台服务打开。</div>
     <section id="dashboard" class="view">
       <div class="heading"><div><div class="eyebrow">SALES OVERVIEW</div><h1>销售分析</h1><p>从平台到 SKU，让每一笔销售更清晰。</p></div><button id="sync-top" class="button primary">↻ 同步订单</button></div>
       <div class="toolbar"><div class="filters"><label>数据来源<select id="source"><option value="baselinker">BaseLinker 真实数据</option><option value="demo">演示数据</option></select></label><label>时间范围<select id="days"><option value="7">最近 7 天</option><option value="30" selected>最近 30 天</option><option value="90">最近 90 天</option><option value="365">最近 365 天</option></select></label><label>币种<select id="currency"><option value="">自动选择</option></select></label></div><span id="last-sync" class="muted">尚未同步</span></div>

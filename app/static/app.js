@@ -9,7 +9,20 @@ function notice(message, error = false) {
   noticeTimer = setTimeout(() => { $('notice').hidden = true; }, 6500);
 }
 async function api(path, options = {}) {
-  const response = await fetch(path, options);
+  let response;
+  if (window.__STATIC_PREVIEW__) {
+    $('preview-banner').hidden = false;
+    throw new Error('当前为界面预览，未连接真实数据服务。');
+  }
+  try { response = await fetch(path, options); }
+  catch (error) {
+    $('preview-banner').hidden = false;
+    throw new Error('无法连接数据服务，请通过已启动的中台服务打开页面。');
+  }
+  if (!(response.headers.get('content-type') || '').includes('application/json')) {
+    $('preview-banner').hidden = false;
+    throw new Error('当前页面未连接中台接口，请通过已启动的中台服务打开。');
+  }
   const result = await response.json();
   if (!response.ok) {
     const message = typeof result.detail === 'string' ? result.detail : '请求参数不正确，请检查后重试。';
