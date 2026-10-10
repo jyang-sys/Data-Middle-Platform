@@ -7,12 +7,15 @@
   <link rel="stylesheet" href="./management.css">
   <script src="./app.js" defer></script>
   <script src="./management.js" defer></script>
+  <link rel="stylesheet" href="./reports.css">
+  <script src="./reports.js" defer></script>
 </head>
 <body>
   <aside class="sidebar">
     <a class="brand" href="/" aria-label="数据中台首页"><span class="brand-mark">B</span><span>数据中台<small>SALES WORKSPACE</small></span></a>
     <div class="nav-label">工作空间</div>
-    <button class="nav active" data-tab="dashboard">◈ <span>销售分析</span></button>
+    <button class="nav active" data-tab="sales-report">◈ <span>销量试算报表</span></button>
+    <button class="nav" data-tab="dashboard">◈ <span>旧版销售分析</span></button>
     <button class="nav" data-tab="connection">⇄ <span>数据接入</span></button>
     <button class="nav" data-tab="base-data">▦ <span>中台基础数据</span></button>
     <button class="nav" data-tab="ownership">♧ <span>员工与归属</span></button>
@@ -20,9 +23,38 @@
     <div class="sidebar-bottom"><span class="dot"></span>本地开发版<small>BaseLinker · SQLite</small></div>
   </aside>
   <main>
-    <header><span>工作空间 <span class="slash">/</span> <span id="breadcrumb">销售分析</span></span><span class="edition">基础版 · 单用户</span></header>
+    <header><span>工作空间 <span class="slash">/</span> <span id="breadcrumb">销量试算报表</span></span><span class="edition">基础版 · 单用户</span></header>
     <div id="preview-banner" class="banner" role="status" hidden>界面预览未连接数据服务。此处可查看页面布局；真实数据查询与维护需通过已启动的中台服务打开。</div>
-    <section id="dashboard" class="view">
+    <section id="sales-report" class="view">
+      <div class="heading"><div><div class="eyebrow">UNIT SALES REPORT</div><h1>销量试算报表</h1><p>沿用手工报表的型号、平台和每日销量布局，汇总可核对到订单明细。</p></div><a id="report-export" class="button primary" aria-disabled="true">导出 Excel</a></div>
+      <div class="banner">试算阶段：取消、退款、退货的扣减规则待确认。此处不计算销售额和利润。</div>
+      <article class="panel instructions"><form id="report-form"><div class="form-grid">
+        <label>开始日期<input type="date" id="report-start" required></label><label>结束日期<input type="date" id="report-end" required></label>
+        <label>月份快捷查询<input type="month" id="report-month"></label><label>时区<select id="report-timezone"><option value="Asia/Shanghai">Asia/Shanghai</option><option value="UTC">UTC</option><option value="Europe/Warsaw">Europe/Warsaw</option><option value="America/New_York">America/New_York</option></select></label>
+        <label>订单日期口径<select id="report-date-basis"><option value="base_created">Base 创建时间（试算）</option><option value="platform_order">维护的平台订单日期</option></select></label>
+        <label>汇总层级<select id="report-granularity"><option value="specification">具体配置与颜色</option><option value="model">型号合计</option></select></label>
+        <label>平台<select id="report-platform"><option value="">全部平台</option></select></label><label>店铺<select id="report-shop"><option value="">全部店铺</option></select></label>
+        <label>销售小组<select id="report-group"><option value="">全部小组</option></select></label><label>销售负责人<select id="report-employee"><option value="">全部人员</option></select></label>
+        <label>型号<input id="report-model" placeholder="输入映射后的型号"></label><label>原 SKU<input id="report-sku" placeholder="精确匹配原 SKU"></label>
+        <label>产品类型<input id="report-type" placeholder="手机 / 平板 / 其他"></label><label>计入状态 ID<input id="report-statuses" placeholder="留空为全部状态，或用逗号分隔"></label>
+        <label class="check-label"><input type="checkbox" id="report-confirmed" checked>仅已确认订单</label>
+      </div><div class="actions"><button type="button" class="button" data-report-days="3">最近 3 天</button><button type="button" class="button" data-report-days="7">最近 7 天</button><button type="button" class="button" data-report-days="14">最近 14 天</button><button type="submit" class="button primary">查询销量</button></div></form><p id="report-filter-changed" class="muted" hidden>筛选条件已修改，请重新查询。当前表格及导出仍使用上次查询条件。</p><p class="muted">最近 N 天包含当天，按所选时区的自然日统计。平台订单日期来自订单本地附加字段 platform_order_date；未填写时不自动替代。</p></article>
+      <div class="metrics"><article class="metric"><span>商品销量</span><strong id="report-units">—</strong><small>件数合计</small></article><article class="metric"><span>计入订单</span><strong id="report-orders">—</strong><small>按 Base 订单 ID 去重</small></article><article class="metric"><span>商品明细</span><strong id="report-lines">—</strong><small>所有视图共用同一明细</small></article><article class="metric"><span>未映射商品明细</span><strong id="report-unmapped-count">—</strong><small>保留原 SKU 单独显示</small></article></div>
+      <article class="panel instructions"><h2>统计口径与数据检查</h2><p id="report-period" class="muted"></p><ul id="report-warnings"></ul><p id="report-diagnostics" class="muted"></p></article>
+      <article class="panel"><div class="panel-heading"><h2>型号与平台月度销量</h2><span class="muted">按年月分组，月内按销量排序</span></div><div class="table-wrap" id="report-monthly"></div></article>
+      <article class="panel"><div class="panel-heading"><h2>全平台每日销量</h2><span class="muted">每日合计与期间总量一致</span></div><div id="report-trend"></div><div class="table-wrap" id="report-daily"></div></article>
+      <article class="panel"><div class="panel-heading"><h2>各平台商品每日销量</h2><span class="muted">产品类型 · 型号 / 规格 · 每日件数</span></div><div class="table-wrap" id="report-product-daily"></div></article>
+      <div class="two-columns"><article class="panel"><div class="panel-heading"><h2>小组销量</h2></div><div class="table-wrap" id="report-groups"></div></article><article class="panel"><div class="panel-heading"><h2>人员销量</h2></div><div class="table-wrap" id="report-employees"></div></article></div>
+      <article class="panel"><div class="panel-heading"><h2>店铺销量</h2></div><div class="table-wrap" id="report-shops"></div></article>
+      <article class="panel instructions"><h2>订单明细核对</h2><p id="report-detail-scope" class="muted">点击月度汇总行的“核对明细”，或查看全部明细。</p><button id="report-all-details" class="button">查看全部明细</button><div class="table-wrap" id="report-details"></div><div class="actions"><button id="report-details-prev" class="button">上一页</button><span id="report-details-page" class="muted"></span><button id="report-details-next" class="button">下一页</button></div></article>
+      <article class="panel instructions"><h2>未映射 SKU</h2><p class="muted">不同平台的未知编码保持分开；确认它们对应同一规格后再维护映射。</p><div class="table-wrap" id="report-unmapped"></div></article>
+      <article class="panel instructions"><h2>型号与规格映射</h2><p class="muted">映射不改写 Base 产品或订单。同规格的多个编码可指向相同型号、配置、颜色；模板中的多配置合并名称不会自动拆分。</p>
+        <form id="report-mapping-form"><div class="form-grid"><label>来源平台<select id="mapping-platform"><option value="*">全部平台（同编码通用）</option></select></label><label>原 SKU<input id="mapping-sku" required maxlength="200"></label><label>统一型号<input id="mapping-model" required maxlength="100" placeholder="例：C51"></label><label>配置<input id="mapping-spec" maxlength="100" placeholder="例：128+6，请按业务口径填写"></label><label>颜色<input id="mapping-color" maxlength="100" placeholder="蓝色"></label><label>产品类型<input id="mapping-type" required maxlength="100" value="未分类" placeholder="手机 / 平板"></label><label>操作人<input id="mapping-actor" required maxlength="100"></label><label>变更原因<input id="mapping-reason" maxlength="500"></label></div><div class="actions"><button class="button primary" type="submit">保存映射</button><button class="button" id="mapping-reset" type="button">新增 / 重置</button><button class="button" id="mapping-history" type="button">查看映射历史</button></div><p id="mapping-version" class="muted">新增映射；已有映射请先从列表读取。</p></form>
+        <div class="actions"><label>查询映射<input id="mapping-search" placeholder="SKU 或型号"></label><button class="button" id="mapping-search-button">查询</button></div><div class="table-wrap" id="report-mappings"></div><div class="actions"><button class="button" id="mapping-prev">上一页</button><span class="muted" id="mapping-page"></span><button class="button" id="mapping-next">下一页</button></div><div class="table-wrap" id="report-mapping-history"></div>
+      </article>
+    </section>
+
+    <section id="dashboard" class="view" hidden>
       <div class="heading"><div><div class="eyebrow">SALES OVERVIEW</div><h1>销售分析</h1><p>从平台到 SKU，让每一笔销售更清晰。</p></div><button id="sync-top" class="button primary">↻ 同步订单</button></div>
       <div class="toolbar"><div class="filters"><label>数据来源<select id="source"><option value="baselinker">BaseLinker 真实数据</option><option value="demo">演示数据</option></select></label><label>时间范围<select id="days"><option value="7">最近 7 天</option><option value="30" selected>最近 30 天</option><option value="90">最近 90 天</option><option value="365">最近 365 天</option></select></label><label>币种<select id="currency"><option value="">自动选择</option></select></label></div><span id="last-sync" class="muted">尚未同步</span></div>
       <div id="demo-banner" class="banner" hidden>正在查看演示数据，数字仅供体验，与真实订单分开存储。</div>

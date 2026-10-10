@@ -33,7 +33,9 @@ async function api(path, options = {}) {
 function switchTab(id) {
   document.querySelectorAll('.view').forEach((view) => { view.hidden = view.id !== id; });
   document.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === id));
-  $('breadcrumb').textContent = {dashboard: '销售分析', connection: '数据接入', datasets: '表格工具', 'base-data': '中台基础数据', ownership: '员工与归属'}[id];
+  $('breadcrumb').textContent = {'sales-report': '销量试算报表', dashboard: '旧版销售分析', connection: '数据接入', datasets: '表格工具', 'base-data': '中台基础数据', ownership: '员工与归属'}[id];
+  if (id === 'sales-report') loadReportOptions().then(() => refreshSalesReport()).catch((error) => notice(error.message, true));
+  if (id === 'dashboard') refreshDashboard().catch((error) => notice(error.message, true));
   if (id === 'ownership') refreshManagement().catch((error) => notice(error.message, true));
   if (id === 'connection') checkConnection().catch((error) => notice(error.message, true));
   if (id === 'base-data') refreshBase().catch((error) => notice(error.message, true));
@@ -147,7 +149,6 @@ $('run-query').addEventListener('click', async () => {
   try { const data = await api('/api/query', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sql: $('sql').value})}); table('query-table', data.columns, data.rows); $('query-status').textContent = `${data.rows.length} 行 · ${data.elapsed_ms} ms${data.truncated ? ' · 已截取前 200 行' : ''}`; }
   catch (error) { notice(error.message, true); } finally { $('run-query').disabled = false; }
 });
-refreshDashboard().catch((error) => notice(error.message, true));
 checkConnection().catch((error) => notice(error.message, true));
 
 async function refreshBase() {

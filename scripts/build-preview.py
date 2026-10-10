@@ -9,13 +9,13 @@ ROOT = Path(__file__).resolve().parent.parent
 def build(destination):
     static = ROOT / 'app' / 'static'
     html = (static / 'index.html').read_text()
-    for asset in ('style.css', 'management.css'):
+    for asset in ('style.css', 'management.css', 'reports.css'):
         css = (static / asset).read_text()
         html = html.replace(f'<link rel="stylesheet" href="./{asset}">', f'<style>{css}</style>')
-    for asset in ('app.js', 'management.js'):
+    for asset in ('app.js', 'management.js', 'reports.js'):
         html = html.replace(f'<script src="./{asset}" defer></script>', '')
     scripts = '<script>window.__STATIC_PREVIEW__ = true;</script>\n'
-    for asset in ('app.js', 'management.js'):
+    for asset in ('app.js', 'management.js', 'reports.js'):
         # Inline source must not close its HTML script element prematurely.
         code = re.sub(r'</script', r'<\\/script', (static / asset).read_text(), flags=re.I)
         scripts += f'<script>{code}</script>\n'
