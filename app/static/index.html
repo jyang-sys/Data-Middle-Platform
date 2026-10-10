@@ -3,8 +3,10 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>销售数据中台 · BaseLinker</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <script src="/static/app.js" defer></script>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./management.css">
+  <script src="./app.js" defer></script>
+  <script src="./management.js" defer></script>
 </head>
 <body>
   <aside class="sidebar">
@@ -13,11 +15,13 @@
     <button class="nav active" data-tab="dashboard">◈ <span>销售分析</span></button>
     <button class="nav" data-tab="connection">⇄ <span>数据接入</span></button>
     <button class="nav" data-tab="base-data">▦ <span>中台基础数据</span></button>
+    <button class="nav" data-tab="ownership">♧ <span>员工与归属</span></button>
     <button class="nav" data-tab="datasets">▤ <span>表格工具</span></button>
     <div class="sidebar-bottom"><span class="dot"></span>本地开发版<small>BaseLinker · SQLite</small></div>
   </aside>
   <main>
     <header><span>工作空间 <span class="slash">/</span> <span id="breadcrumb">销售分析</span></span><span class="edition">基础版 · 单用户</span></header>
+    <div id="preview-banner" class="banner" role="status" hidden>界面预览未连接数据服务。此处可查看页面布局；真实数据查询与维护需通过已启动的中台服务打开。</div>
     <section id="dashboard" class="view">
       <div class="heading"><div><div class="eyebrow">SALES OVERVIEW</div><h1>销售分析</h1><p>从平台到 SKU，让每一笔销售更清晰。</p></div><button id="sync-top" class="button primary">↻ 同步订单</button></div>
       <div class="toolbar"><div class="filters"><label>数据来源<select id="source"><option value="baselinker">BaseLinker 真实数据</option><option value="demo">演示数据</option></select></label><label>时间范围<select id="days"><option value="7">最近 7 天</option><option value="30" selected>最近 30 天</option><option value="90">最近 90 天</option><option value="365">最近 365 天</option></select></label><label>币种<select id="currency"><option value="">自动选择</option></select></label></div><span id="last-sync" class="muted">尚未同步</span></div>
@@ -51,7 +55,19 @@
       <article class="panel"><div class="panel-heading"><h2>库存来源明细</h2><span class="muted">Base 原始数量 · 前 50 条</span></div><div class="table-wrap" id="base-inventory"></div><p class="muted">预占和供应商待入库保留原字段。缺失值表示未知；实物、虚拟、可用与平台可售口径需另行核对。</p></article>
       <article class="panel"><div class="panel-heading"><h2>平台店铺</h2></div><div class="table-wrap" id="base-shops"></div></article>
       <article class="panel"><div class="panel-heading"><h2>订单与业绩归属</h2><span class="muted">最新 50 条 · 包含未确认订单</span></div><div class="table-wrap" id="base-orders"></div></article>
-      <article class="panel instructions"><h2>维护订单归属</h2><form id="annotation-form"><div class="filters"><label>Base 订单 ID<input id="annotation-id" type="number" min="1" required></label><label>销售负责人<input id="annotation-owner" maxlength="200"></label><label>业务小组<input id="annotation-group" maxlength="200"></label></div><label for="annotation-extra">自定义附加字段 JSON</label><textarea id="annotation-extra" spellcheck="false">{}</textarea><div class="actions"><button type="button" id="annotation-load" class="button">读取当前归属</button><button class="button primary" type="submit">保存归属</button></div></form><p class="muted">字段只写入中台，不修改 Base 订单。保存前请先读取该订单的当前归属。</p></article>
+      <article class="panel instructions"><h2>维护订单归属</h2><p>在“员工与归属”中选择员工、小组，进行单笔或批量维护，并查看变更历史。</p><button class="button primary" data-open="ownership">打开归属管理</button></article>
+    </section>
+    <section id="ownership" class="view" hidden>
+      <div class="heading"><div><div class="eyebrow">OWNERSHIP MANAGEMENT</div><h1>员工与归属</h1><p>维护团队与店铺，明确每笔订单的业务归属。</p></div><button id="ownership-refresh" class="button">刷新数据</button></div>
+      <article class="panel instructions"><div class="filters"><label>操作人（手工记录）<input id="change-actor" maxlength="100" placeholder="填写你的姓名"></label><label>变更原因<input id="change-reason" maxlength="500" placeholder="例如：交接、归属修正"></label></div><p class="muted">每次变更留存前后值。操作人由手工填写，当前版本尚未接入登录身份。</p></article>
+      <div class="two-columns">
+        <article class="panel instructions"><h2>业务小组</h2><form id="group-form"><input id="group-id" type="hidden"><div class="form-grid"><label>编号<input id="group-code" maxlength="40" pattern="[A-Za-z0-9_-]+" required placeholder="TEAM-01"></label><label>名称<input id="group-name" maxlength="100" required></label><label class="check-label"><input id="group-active" type="checkbox" checked>启用</label></div><div class="actions"><button class="button primary" type="submit">保存小组</button><button class="button" type="reset">新增 / 重置</button></div></form><div id="group-table" class="table-wrap"></div></article>
+        <article class="panel instructions"><h2>员工</h2><form id="employee-form"><input id="employee-id" type="hidden"><div class="form-grid"><label>员工编号<input id="employee-code" maxlength="40" pattern="[A-Za-z0-9_-]+" required placeholder="EMP-01"></label><label>姓名<input id="employee-name" maxlength="100" required></label><label>所属小组<select id="employee-group"></select></label><label class="check-label"><input id="employee-active" type="checkbox" checked>在职 / 启用</label></div><div class="actions"><button class="button primary" type="submit">保存员工</button><button class="button" type="reset">新增 / 重置</button></div></form><div id="employee-table" class="table-wrap"></div></article>
+      </div>
+      <article class="panel instructions"><h2>店铺默认归属</h2><p>配置不会自动改写已有订单。单笔维护中可载入店铺建议后确认保存。</p><div id="ownership-shops" class="table-wrap"></div><form id="shop-form"><div class="form-grid"><label>店铺<select id="ownership-shop" required></select></label><label>默认负责人<select id="shop-employee"></select></label><label>默认小组<select id="shop-group"></select></label></div><div class="actions"><button class="button primary" type="submit">保存店铺归属</button><button type="button" id="shop-history" class="button">查看店铺历史</button></div><p id="shop-version" class="muted"></p></form></article>
+      <article class="panel instructions"><h2>订单归属 · 单笔维护</h2><form id="order-form"><div class="form-grid"><label>Base 订单 ID<input id="ownership-order-id" type="number" min="1" required></label><label>销售负责人<select id="order-employee"></select></label><label>业务小组<select id="order-group"></select></label></div><label for="order-extra">本地附加字段 JSON</label><textarea id="order-extra">{}</textarea><div class="actions"><button type="button" class="button" id="order-load">读取当前归属</button><button type="button" class="button" id="order-defaults">载入店铺建议</button><button type="submit" class="button primary">保存订单归属</button><button type="button" class="button" id="order-history">查看订单历史</button></div><p id="order-version" class="muted">请先读取当前归属；已有文本归属会显示并保留，除非显式更改。</p></form></article>
+      <article class="panel instructions"><h2>订单归属 · 批量维护</h2><div class="filters"><label>按平台 / 店铺筛选<select id="order-shop-filter"></select></label><label>按小组筛选<select id="order-group-filter"></select></label><label class="check-label"><input type="checkbox" id="order-unassigned">仅未分配负责人</label><button id="order-search" class="button">查询</button></div><div id="ownership-orders" class="table-wrap"></div><div class="actions"><button id="orders-prev" class="button">上一页</button><span id="orders-page" class="muted"></span><button id="orders-next" class="button">下一页</button><button id="orders-select-all" class="button">选择 / 取消本页</button></div><form id="batch-form"><div class="form-grid"><label>销售负责人<select id="batch-employee"></select></label><label>业务小组<select id="batch-group"></select></label></div><div class="actions"><button class="button primary" type="submit">确认批量保存</button><span id="batch-selected" class="muted">已选 0 笔</span></div></form><p class="muted">批量只修改选定字段，不覆盖附加字段；选员工且小组保持不变时，将采用该员工当前所属小组。任一版本冲突或无效订单将整批取消。</p></article>
+      <article class="panel instructions"><h2 id="history-title">归属变更历史</h2><div id="ownership-history" class="table-wrap"><p class="muted">选择订单、店铺、员工或小组查看历史。</p></div><div class="actions"><button class="button" id="history-prev">上一页</button><span id="history-page" class="muted"></span><button class="button" id="history-next">下一页</button></div></article>
     </section>
     <section id="datasets" class="view" hidden>
       <div class="heading"><div><div class="eyebrow">TABLE WORKBENCH</div><h1>表格工具</h1><p>上传并查询 CSV / Excel。此处的表格独立于销售看板。</p></div><label class="button primary" for="upload-file">＋ 上传表格</label><input id="upload-file" type="file" accept=".csv,.xlsx" hidden></div>

@@ -9,7 +9,20 @@ function notice(message, error = false) {
   noticeTimer = setTimeout(() => { $('notice').hidden = true; }, 6500);
 }
 async function api(path, options = {}) {
-  const response = await fetch(path, options);
+  let response;
+  if (window.__STATIC_PREVIEW__) {
+    $('preview-banner').hidden = false;
+    throw new Error('当前为界面预览，未连接真实数据服务。');
+  }
+  try { response = await fetch(path, options); }
+  catch (error) {
+    $('preview-banner').hidden = false;
+    throw new Error('无法连接数据服务，请通过已启动的中台服务打开页面。');
+  }
+  if (!(response.headers.get('content-type') || '').includes('application/json')) {
+    $('preview-banner').hidden = false;
+    throw new Error('当前页面未连接中台接口，请通过已启动的中台服务打开。');
+  }
   const result = await response.json();
   if (!response.ok) {
     const message = typeof result.detail === 'string' ? result.detail : '请求参数不正确，请检查后重试。';
@@ -20,7 +33,8 @@ async function api(path, options = {}) {
 function switchTab(id) {
   document.querySelectorAll('.view').forEach((view) => { view.hidden = view.id !== id; });
   document.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === id));
-  $('breadcrumb').textContent = {dashboard: '销售分析', connection: '数据接入', datasets: '表格工具', 'base-data': '中台基础数据'}[id];
+  $('breadcrumb').textContent = {dashboard: '销售分析', connection: '数据接入', datasets: '表格工具', 'base-data': '中台基础数据', ownership: '员工与归属'}[id];
+  if (id === 'ownership') refreshManagement().catch((error) => notice(error.message, true));
   if (id === 'connection') checkConnection().catch((error) => notice(error.message, true));
   if (id === 'base-data') refreshBase().catch((error) => notice(error.message, true));
   if (id === 'datasets') loadDatasets().catch((error) => notice(error.message, true));
@@ -157,30 +171,3 @@ document.querySelectorAll('[data-base-sync]').forEach(button => button.addEventL
   } catch (error) { notice(error.message, true); }
   finally { button.disabled = false; refreshBase().catch(error => notice(error.message, true)); }
 }));
-let loadedAnnotationId = null;
-$('annotation-id').addEventListener('input', () => { loadedAnnotationId = null; });
-$('annotation-load').addEventListener('click', async () => {
-  try {
-    const id = $('annotation-id').value;
-    if (!id) throw new Error('请先填写订单 ID。');
-    const data = await api('/api/base/orders/' + encodeURIComponent(id));
-    $('annotation-owner').value = data.annotation.sales_owner || '';
-    $('annotation-group').value = data.annotation.business_group || '';
-    $('annotation-extra').value = JSON.stringify(data.annotation.extra_fields, null, 2);
-    loadedAnnotationId = id;
-    notice('已读取当前归属。');
-  } catch (error) { notice(error.message, true); }
-});
-$('annotation-form').addEventListener('submit', async event => {
-  event.preventDefault();
-  try {
-    if (loadedAnnotationId !== $('annotation-id').value) throw new Error('请先读取该订单的当前归属。');
-    const extra = JSON.parse($('annotation-extra').value);
-    if (!extra || Array.isArray(extra) || typeof extra !== 'object') throw new Error('附加字段需要是 JSON 对象。');
-    await api('/api/base/orders/' + encodeURIComponent($('annotation-id').value) + '/annotation', {
-      method: 'PATCH', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({sales_owner: $('annotation-owner').value || null, business_group: $('annotation-group').value || null, extra_fields: extra})
-    });
-    notice('订单归属已保存。'); await refreshBase();
-  } catch (error) { notice(error.message, true); }
-});

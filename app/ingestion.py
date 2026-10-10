@@ -405,7 +405,8 @@ def order_detail(order_id: int):
         if order is None:
             raise HTTPException(404, "订单不存在。")
         annotation = db.execute("SELECT * FROM order_annotations WHERE order_id=?", (order_id,)).fetchone()
-    local = dict(annotation) if annotation else {"sales_owner": None, "business_group": None, "extra_json": "{}"}
+    local = dict(annotation) if annotation else {"sales_owner": None, "business_group": None,
+                                                "employee_id": None, "group_id": None, "version": 0, "extra_json": "{}"}
     local["extra_fields"] = json.loads(local.pop("extra_json"))
     return {"source_order": json.loads(order["raw_json"]), "annotation": local}
 
@@ -418,27 +419,5 @@ class Annotation(BaseModel):
 
 @router.patch("/orders/{order_id}/annotation")
 def annotate(order_id: int, body: Annotation):
-    from app.main import database
-    with database() as db:
-        if db.execute("SELECT 1 FROM base_orders WHERE order_id=?", (order_id,)).fetchone() is None:
-            raise HTTPException(404, "订单不存在。")
-        existing = db.execute("SELECT * FROM order_annotations WHERE order_id=?", (order_id,)).fetchone()
-        owner = existing["sales_owner"] if existing else None
-        group = existing["business_group"] if existing else None
-        extra = json.loads(existing["extra_json"]) if existing else {}
-        if "sales_owner" in body.model_fields_set:
-            owner = body.sales_owner
-        if "business_group" in body.model_fields_set:
-            group = body.business_group
-        if "extra_fields" in body.model_fields_set:
-            extra = body.extra_fields
-        try:
-            raw = encode(extra)
-        except (TypeError, ValueError) as error:
-            raise HTTPException(422, "附加字段必须是有效 JSON。") from error
-        if len(raw.encode()) > 65536:
-            raise HTTPException(422, "附加字段不能超过 64 KiB。")
-        db.execute("""INSERT INTO order_annotations VALUES(?,?,?,?,?) ON CONFLICT(order_id)
-            DO UPDATE SET sales_owner=excluded.sales_owner,business_group=excluded.business_group,
-            extra_json=excluded.extra_json,updated_at=excluded.updated_at""", (order_id, owner, group, raw, now()))
-    return {"order_id": order_id, "sales_owner": owner, "business_group": group, "extra_fields": extra}
+    from app.management import update_annotations
+    return update_annotations([order_id], body.model_dump(exclude_unset=True), "兼容接口", "旧版文本归属维护")["orders"][0]
