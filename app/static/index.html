@@ -8,14 +8,16 @@
   <script src="./app.js" defer></script>
   <script src="./management.js" defer></script>
   <link rel="stylesheet" href="./reports.css">
+  <link rel="stylesheet" href="./inventory.css">
   <script src="./reports.js" defer></script>
+  <script src="./inventory.js" defer></script>
 </head>
 <body>
   <aside class="sidebar">
     <a class="brand" href="/" aria-label="数据中台首页"><span class="brand-mark">B</span><span>数据中台<small>SALES WORKSPACE</small></span></a>
     <div class="nav-label">工作空间</div>
     <button class="nav active" data-tab="sales-report">◈ <span>销量试算报表</span></button>
-    <button class="nav" data-tab="stock-dashboard">▦ <span>来源库存看板</span></button>
+    <button class="nav" data-tab="stock-dashboard">▦ <span>库存中心</span></button>
     <button class="nav" data-tab="dashboard">◈ <span>旧版销售分析</span></button>
     <button class="nav" data-tab="connection">⇄ <span>数据接入</span></button>
     <button class="nav" data-tab="base-data">▦ <span>中台基础数据</span></button>
@@ -55,12 +57,19 @@
     </section>
 
     <section id="stock-dashboard" class="view" hidden>
-      <div class="heading"><div><div class="eyebrow">SOURCE INVENTORY</div><h1>来源库存看板</h1><p>真实 Base 库存按产品目录和仓库查询，保留来源数量及更新时间。</p></div><button id="stock-refresh" class="button primary">刷新看板</button></div>
-      <div class="banner">字段核对阶段：Base 库存不能直接等同海外仓实物库存，各目录、各仓不会自动合计。</div>
-      <article class="panel instructions"><form id="stock-form"><div class="form-grid"><label>产品库存目录<select id="stock-catalog"></select></label><label>来源仓库<select id="stock-warehouse"><option value="">全部仓库（分别显示）</option></select></label><label>商品名称 / SKU<input id="stock-search" placeholder="支持父 SKU 查询"></label><label class="check-label"><input id="stock-nonzero" type="checkbox">隐藏零库存</label></div><div class="actions"><button type="submit" class="button primary">查询库存</button></div></form><p id="stock-scope" class="muted"></p><button id="stock-clear-link" type="button" class="button" hidden>清除销量商品联动</button></article>
-      <div class="metrics"><article class="metric"><span>实物在库</span><strong>待核对</strong><small>尚无已确认的实物口径</small></article><article class="metric"><span>运输在途</span><strong>待核对</strong><small>不以供应商待入库代替</small></article><article class="metric"><span>可用库存</span><strong>待核对</strong><small>冻结、待发货扣减待确认</small></article><article class="metric"><span>平台可售</span><strong>待核对</strong><small>平台分配规则待确认</small></article></div>
-      <article class="panel instructions"><h2>各仓来源数量</h2><p class="muted">stock：来源库存 · reservations：来源预占 · incoming：供应商待入库。未知字段显示“未知”；负数保留来源值。</p><div id="stock-distribution" class="table-wrap"></div><ul id="stock-warnings"></ul></article>
-      <article class="panel instructions"><h2>仓库商品明细</h2><div id="stock-lines" class="table-wrap"></div><div class="actions"><button id="stock-prev" class="button">上一页</button><span id="stock-page" class="muted"></span><button id="stock-next" class="button">下一页</button></div></article>
+      <div class="heading stock-heading"><div><div class="eyebrow">库存中心 / 实时库存</div><h1>多仓库存看板</h1></div><div class="stock-header-actions"><span id="stock-sync" class="stock-sync"></span><button id="stock-refresh" class="button">↻ 刷新库存</button><button id="stock-settings-open" class="button" aria-label="库存状态设置">⚙ 设置</button></div></div>
+      <article class="panel stock-filter-panel"><div class="stock-panel-head"><h2>库存筛选</h2><button id="stock-clear-link" type="button" class="button" hidden>清除销量商品联动</button></div>
+        <form id="stock-form"><div class="stock-primary-filters">
+          <label>SKU / 父 SKU / 产品名称<input id="stock-search" placeholder="多个关键词用逗号或换行分隔"></label>
+          <label>产品库存目录<select id="stock-catalog"></select></label><label>海外仓服务商<select id="stock-provider" disabled><option>未维护</option></select></label><label>海外仓账号<select id="stock-account" disabled><option>未维护</option></select></label>
+          <div class="stock-warehouse-field"><span>统计仓库</span><button id="stock-warehouse-open" type="button" class="button">全部仓库 ▾</button><div id="stock-warehouse-popover" class="stock-popover" hidden><div class="stock-popover-head"><b>选择仓库</b><button id="stock-warehouse-all" type="button" class="stock-link-button">全部</button></div><div id="stock-warehouse-list"></div><button id="stock-warehouse-apply" type="button" class="button primary">确定</button></div></div>
+          <label>国家 / 地区<select id="stock-country"><option value="">全部国家</option></select></label>
+        </div><div class="stock-secondary-filters"><div class="stock-status-field"><span>来源库存状态</span><div id="stock-status-filter" class="stock-segmented"><button type="button" class="active" data-stock-status="all">全部</button><button type="button" data-stock-status="available">有库存</button><button type="button" data-stock-status="low">低库存</button><button type="button" data-stock-status="out">零库存</button><button type="button" data-stock-status="abnormal">数据异常</button></div></div><label>来源数量范围<div class="stock-range"><input id="stock-min" type="number" placeholder="最小"><span>—</span><input id="stock-max" type="number" placeholder="最大"></div></label><label>获取时间<select id="stock-freshness"><option value="">全部</option><option value="1">1 小时内</option><option value="6">6 小时内</option><option value="24">24 小时内</option></select></label><div class="stock-filter-actions"><button id="stock-reset" type="button" class="button">重置</button><button type="submit" class="button primary">查询库存</button></div></div></form>
+        <p id="stock-scope" class="muted"></p>
+      </article>
+      <div id="stock-metrics" class="metrics stock-metrics"></div>
+      <article class="panel stock-data-panel"><div class="stock-data-toolbar"><div class="stock-tabs" role="tablist" aria-label="库存视图"><button class="active" data-stock-view="summary" role="tab" aria-selected="true">库存汇总</button><button data-stock-view="matrix" role="tab" aria-selected="false">库存矩阵</button><button data-stock-view="detail" role="tab" aria-selected="false">仓库明细</button></div><div class="stock-toolbar-right"><span id="stock-result-count" class="muted"></span><button id="stock-export" class="button">↓ 导出当前结果</button></div></div><div id="stock-table" class="table-wrap"></div><div class="stock-table-foot"><span class="muted">来源数量 · “—”表示未提供或未确认</span><div class="actions"><button id="stock-prev" class="button">‹</button><span id="stock-page" class="muted"></span><button id="stock-next" class="button">›</button></div></div></article>
+      <dialog id="stock-settings" class="stock-settings"><form id="stock-settings-form"><div class="stock-panel-head"><h2>库存状态设置</h2><button id="stock-settings-close" type="button" class="stock-link-button" aria-label="关闭">×</button></div><label>低库存阈值（来源数量）<input id="stock-threshold" type="number" min="1" required value="20"></label><label>数据超时阈值（小时）<input id="stock-stale" type="number" min="1" required value="24"></label><button type="submit" class="button primary">保存设置</button></form></dialog>
     </section>
     <section id="dashboard" class="view" hidden>
       <div class="heading"><div><div class="eyebrow">SALES OVERVIEW</div><h1>销售分析</h1><p>从平台到 SKU，让每一笔销售更清晰。</p></div><button id="sync-top" class="button primary">↻ 同步订单</button></div>

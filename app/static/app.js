@@ -40,7 +40,7 @@ function switchTab(id) {
   window.scrollTo({top: 0});
   document.querySelectorAll('.view').forEach((view) => { view.hidden = view.id !== id; });
   document.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === id));
-  $('breadcrumb').textContent = {'sales-report': '销量试算报表', 'stock-dashboard': '来源库存看板', dashboard: '旧版销售分析', connection: '数据接入', datasets: '表格工具', 'base-data': '中台基础数据', ownership: '员工与归属'}[id];
+  $('breadcrumb').textContent = {'sales-report': '销量试算报表', 'stock-dashboard': '多仓库存看板', dashboard: '旧版销售分析', connection: '数据接入', datasets: '表格工具', 'base-data': '中台基础数据', ownership: '员工与归属'}[id];
   if (id === 'sales-report') loadReportOptions().then(() => refreshSalesReport()).catch((error) => notice(error.message, true));
   if (id === 'stock-dashboard') initializeStockDashboard().catch(error => notice(error.message, true));
   if (id === 'dashboard') refreshDashboard().catch((error) => notice(error.message, true));

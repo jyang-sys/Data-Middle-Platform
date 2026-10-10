@@ -45,3 +45,21 @@ class StockDashboardTests(unittest.TestCase):
         self.assertEqual(page['total_rows'],2);self.assertEqual(len(page['rows']),1)
         self.assertEqual(self.client.get('/api/stock-dashboard/summary',params={'inventory_id':999}).status_code,404)
         self.assertEqual(self.client.get('/api/stock-dashboard/summary').status_code,422)
+
+    def test_complete_dataset_preserves_unknown_country_and_catalog_isolation(self):
+        with main.database() as db:
+            db.execute('UPDATE base_warehouses SET raw_json=? WHERE warehouse_key=?', ('{"country":"PL","address":"not exposed"}', 'bl_1'))
+        result = self.client.get('/api/stock-dashboard/dataset', params={'inventory_id':1}).json()
+        self.assertEqual(result['total_rows'],2)
+        self.assertEqual(result['rows'][0]['country'],'PL')
+        self.assertIsNone(result['rows'][0]['provider'])
+        self.assertIsNone(result['rows'][0]['account'])
+        self.assertIsNone(result['rows'][0]['reservations'])
+        self.assertEqual(result['rows'][1]['stock'],'-2')
+        self.assertNotIn('warehouse_json',result['rows'][0])
+        self.assertNotIn('address',result['rows'][0])
+        self.assertIsNone(result['available_stock'])
+        self.assertIsNone(result['in_transit'])
+        options=self.client.get('/api/stock-dashboard/options').json()
+        self.assertEqual(next(w for w in options['warehouses'] if w['id']=='bl_1')['country'],'PL')
+        self.assertEqual(self.client.get('/api/stock-dashboard/dataset',params={'inventory_id':999}).status_code,404)

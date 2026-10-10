@@ -1,4 +1,5 @@
 """Source inventory by catalog/warehouse, without inferring physical availability."""
+import json
 from decimal import Decimal, InvalidOperation
 from fastapi import APIRouter, HTTPException, Query
 
@@ -28,10 +29,13 @@ def options():
         catalogs = [dict(r) for r in db.execute('''SELECT c.inventory_id AS id,c.name,COUNT(s.product_id) AS rows
             FROM base_catalogs c JOIN base_stock s ON s.inventory_id=c.inventory_id GROUP BY c.inventory_id ORDER BY c.inventory_id''')]
         warehouses = [dict(r) for r in db.execute('''SELECT DISTINCT s.inventory_id,s.warehouse_key AS id,
-            COALESCE(w.name,s.warehouse_key) AS name,w.warehouse_type FROM base_stock s
+            COALESCE(w.name,s.warehouse_key) AS name,w.warehouse_type,w.raw_json AS warehouse_json FROM base_stock s
             LEFT JOIN base_warehouses w ON w.warehouse_key=s.warehouse_key ORDER BY s.inventory_id,s.warehouse_key''')]
         common = db.execute('''SELECT CAST(storage_id AS INTEGER) id,COUNT(*) n FROM base_order_items
             WHERE storage='db' GROUP BY storage_id ORDER BY n DESC LIMIT 1''').fetchone()
+    for warehouse in warehouses:
+        warehouse['country'] = json.loads(warehouse.pop('warehouse_json') or '{}').get('country') or None
+        warehouse['provider'] = warehouse['account'] = None
     default = common['id'] if common and any(c['id'] == common['id'] for c in catalogs) else catalogs[0]['id'] if catalogs else None
     return {'catalogs': catalogs, 'warehouses': warehouses, 'default_catalog': default}
 
@@ -73,3 +77,30 @@ def summary(inventory_id: int = Query(ge=1), warehouse_key: str | None = None, s
                          '来源 stock 尚未认定为海外仓实物；reservations 为来源预占，incoming 为供应商待入库，不代表运输在途。',
                          '实物在库、运输在途、可用库存、平台可售、退货状态和库存所属小组尚待字段核对。',
                          '负库存保留来源值并提示，不自动截断为零；各仓更新时间显示本次筛选明细中最早的获取时间。']}
+
+
+@router.get('/dataset')
+def dataset(inventory_id: int = Query(ge=1)):
+    """Complete selected-catalog snapshot for client filtering and inventory matrix."""
+    from app.main import database
+    with database() as db:
+        db.execute('BEGIN')
+        catalog = db.execute('SELECT inventory_id,name FROM base_catalogs WHERE inventory_id=?', (inventory_id,)).fetchone()
+        if catalog is None:
+            raise HTTPException(404, '库存目录不存在。')
+        rows = [dict(r) for r in db.execute("""SELECT s.inventory_id,s.product_id,s.warehouse_key,s.stock,
+            s.reservations,s.incoming,s.fetched_at,p.sku,p.name,p.parent_id,parent.sku AS parent_sku,
+            COALESCE(w.name,s.warehouse_key) AS warehouse_name,w.warehouse_type,w.raw_json AS warehouse_json
+            FROM base_stock s LEFT JOIN base_products p ON p.inventory_id=s.inventory_id AND p.product_id=s.product_id
+            LEFT JOIN base_products parent ON parent.inventory_id=p.inventory_id AND parent.product_id=p.parent_id
+            LEFT JOIN base_warehouses w ON w.warehouse_key=s.warehouse_key
+            WHERE s.inventory_id=? ORDER BY s.product_id,s.warehouse_key""", (inventory_id,))]
+        job = db.execute("SELECT status,finished_at FROM base_sync_jobs WHERE domain='inventory' ORDER BY started_at DESC LIMIT 1").fetchone()
+    for row in rows:
+        row['country'] = json.loads(row.pop('warehouse_json') or '{}').get('country') or None
+        row['provider'] = row['account'] = row['external_sku'] = None
+        for field in ('stock', 'reservations', 'incoming'):
+            row[field] = quantity(row[field])
+    return {'catalog': dict(catalog), 'rows': rows, 'total_rows': len(rows),
+            'physical_stock': None, 'available_stock': None, 'in_transit': None, 'platform_saleable': None,
+            'last_sync': dict(job) if job else None}

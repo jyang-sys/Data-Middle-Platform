@@ -168,8 +168,8 @@ function drawUnitTrend(rows) {
   const points = rows.map((r, i) => [pad + i * (width - 2 * pad) / Math.max(1, rows.length - 1), height - pad - r.total / maximum * (height - 2 * pad)]);
   function add(name, attributes, text) { const el = document.createElementNS(ns, name); Object.entries(attributes).forEach(([k,v]) => el.setAttribute(k, v)); if (text) el.textContent = text; svg.append(el); return el; }
   [0, maximum].forEach(value => { const y = height - pad - value / maximum * (height - 2 * pad); add('line', {x1: pad, x2: width-pad, y1: y, y2: y, stroke: '#e5ece9'}); add('text', {x: 5, y: y+4, fill: '#657181', 'font-size': 12}, `${value}件`); });
-  add('polyline', {points: points.map(p => p.join(',')).join(' '), fill: 'none', stroke: '#16856b', 'stroke-width': 3});
-  points.forEach(([x,y], i) => { const dot = add('circle', {cx: x, cy: y, r: 4, fill: '#16856b', tabindex: 0}); const title = document.createElementNS(ns, 'title'); title.textContent = `${rows[i].date}：${rows[i].total}件`; dot.append(title); dot.setAttribute('aria-label', title.textContent); });
+  add('polyline', {points: points.map(p => p.join(',')).join(' '), fill: 'none', stroke: '#2457d6', 'stroke-width': 3});
+  points.forEach(([x,y], i) => { const dot = add('circle', {cx: x, cy: y, r: 4, fill: '#2457d6', tabindex: 0}); const title = document.createElementNS(ns, 'title'); title.textContent = `${rows[i].date}：${rows[i].total}件`; dot.append(title); dot.setAttribute('aria-label', title.textContent); });
   if (rows.length) { add('text', {x: pad, y: height-8, fill: '#657181', 'font-size': 12}, rows[0].date); add('text', {x: width-pad, y: height-8, 'text-anchor': 'end', fill: '#657181', 'font-size': 12}, rows.at(-1).date); }
   $('report-trend').replaceChildren(svg);
 }
@@ -182,50 +182,3 @@ $('report-latest').addEventListener('click', () => {
   $('report-start').value = start.toISOString().slice(0,10); $('report-end').value = end;
   refreshSalesReport().catch(error => notice(error.message, true));
 });
-const stockState = {options: null, productId: null, offset: 0, total: 0, params: null, request: 0};
-function stockWarehouseOptions() {
-  const catalog = Number($('stock-catalog').value); $('stock-warehouse').replaceChildren(new Option('全部仓库（分别显示）', ''));
-  stockState.options.warehouses.filter(w => w.inventory_id === catalog).forEach(w => $('stock-warehouse').append(new Option(w.name, w.id)));
-}
-async function initializeStockDashboard() {
-  if (!stockState.options) {
-    stockState.options = await api('/api/stock-dashboard/options');
-    $('stock-catalog').replaceChildren(); stockState.options.catalogs.forEach(c => $('stock-catalog').append(new Option(c.name, c.id)));
-    if (stockState.options.default_catalog) $('stock-catalog').value = stockState.options.default_catalog;
-    stockWarehouseOptions();
-  }
-  await refreshStockDashboard();
-}
-async function refreshStockDashboard(offset = 0, reuse = false) {
-  const request = ++stockState.request; stockState.offset = offset;
-  const params = reuse ? new URLSearchParams(stockState.params) : new URLSearchParams({inventory_id: $('stock-catalog').value, nonzero_only: $('stock-nonzero').checked, search: $('stock-search').value.trim()});
-  if (!reuse && $('stock-warehouse').value) params.set('warehouse_key', $('stock-warehouse').value);
-  if (!reuse && stockState.productId) params.set('product_id', stockState.productId);
-  params.set('offset', offset); params.set('limit', 50);
-  const data = await api('/api/stock-dashboard/summary?' + params); if (request !== stockState.request) return;
-  stockState.params = params; stockState.total = data.total_rows;
-  $('stock-clear-link').hidden = !stockState.productId;
-  $('stock-scope').textContent = `${data.catalog.name} · ${data.product_count} 种来源产品 · ${data.total_rows} 条仓库明细。库存所属小组尚未维护，不按销售小组代替。${stockState.productId ? ' 已关联销量产品 ID：'+stockState.productId : ''}`;
-  const sumLabel = value => `${number(value.value)}${value.unknown_rows ? '（'+value.unknown_rows+' 条未知）' : ''}`;
-  table('stock-distribution', ['仓库', '来源类型', 'stock', 'reservations', 'incoming', '负库存明细', '获取时间'], data.warehouses.map(w => [w.warehouse_name, w.warehouse_type, sumLabel(w.stock), sumLabel(w.reservations), sumLabel(w.incoming), w.negative_rows, new Date(w.updated_at).toLocaleString('zh-CN')]));
-  $('stock-warnings').replaceChildren();data.warnings.forEach(text => {const li=document.createElement('li');li.textContent=text;$('stock-warnings').append(li)});
-  const q = value => value === null ? '未知' : number(value);
-  table('stock-lines', ['仓库', '产品 ID', '原 SKU', '父 SKU', '产品名称', 'stock', 'reservations', 'incoming', '获取时间'], data.rows.map(r => [r.warehouse_name, r.product_id, r.sku, r.parent_sku || r.sku, r.name, q(r.stock), q(r.reservations), q(r.incoming), new Date(r.fetched_at).toLocaleString('zh-CN')]));
-  $('stock-page').textContent = `${offset+(data.total_rows?1:0)}–${Math.min(offset+50,data.total_rows)} / ${data.total_rows}`; $('stock-prev').disabled=offset===0;$('stock-next').disabled=offset+50>=data.total_rows;
-}
-$('stock-catalog').addEventListener('change', () => {stockState.productId=null;stockWarehouseOptions()});
-$('stock-clear-link').addEventListener('click', () => {stockState.productId=null;refreshStockDashboard().catch(e=>notice(e.message,true))});
-$('stock-form').addEventListener('submit', event => {event.preventDefault();refreshStockDashboard().catch(e=>notice(e.message,true))});
-$('stock-refresh').addEventListener('click', ()=>initializeStockDashboard().catch(e=>notice(e.message,true)));
-$('stock-prev').addEventListener('click', ()=>refreshStockDashboard(Math.max(0,stockState.offset-50),true).catch(e=>notice(e.message,true)));
-$('stock-next').addEventListener('click', ()=>refreshStockDashboard(stockState.offset+50,true).catch(e=>notice(e.message,true)));
-if (window.__DATA_SNAPSHOT__) $('stock-form').querySelectorAll('input,select,button').forEach(el=>el.disabled=true);
-
-async function linkSourceStock(key) {
-  await initializeStockDashboard();
-  if (![...$('stock-catalog').options].some(o=>o.value===key[1])) {notice('该订单目录暂无库存快照。',true);return;}
-  $('stock-catalog').value=key[1];stockWarehouseOptions();$('stock-search').value='';$('stock-nonzero').checked=false;stockState.productId=Number(key[2]);
-  document.querySelectorAll('.view').forEach(view=>view.hidden=view.id!=='stock-dashboard');
-  document.querySelectorAll('[data-tab]').forEach(button=>button.classList.toggle('active',button.dataset.tab==='stock-dashboard'));
-  $('breadcrumb').textContent='来源库存看板';window.scrollTo({top:0});await refreshStockDashboard();
-}

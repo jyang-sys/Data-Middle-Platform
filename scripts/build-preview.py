@@ -42,6 +42,7 @@ def capture(base_url):
     stocks = get('/api/stock-dashboard/options')
     if stocks['default_catalog']:
         params = {'inventory_id': stocks['default_catalog'], 'nonzero_only':'false', 'search':'', 'offset':0, 'limit':50}
+        get('/api/stock-dashboard/dataset?' + urlencode({'inventory_id': stocks['default_catalog']}))
         stock = get('/api/stock-dashboard/summary?' + urlencode(params))
         for offset in range(50, stock['total_rows'], 50):
             get('/api/stock-dashboard/summary?' + urlencode({**params, 'offset': offset}))
@@ -51,15 +52,15 @@ def capture(base_url):
 def build(destination, live_url=None):
     static = ROOT / 'app' / 'static'
     html = (static / 'index.html').read_text()
-    for asset in ('style.css', 'management.css', 'reports.css'):
+    for asset in ('style.css', 'management.css', 'reports.css', 'inventory.css'):
         css = (static / asset).read_text()
         html = html.replace(f'<link rel="stylesheet" href="./{asset}">', f'<style>{css}</style>')
-    for asset in ('app.js', 'management.js', 'reports.js'):
+    for asset in ('app.js', 'management.js', 'reports.js', 'inventory.js'):
         html = html.replace(f'<script src="./{asset}" defer></script>', '')
     snapshot = capture(live_url) if live_url else None
     data = json.dumps(snapshot, ensure_ascii=True).replace('<', r'\u003c') if snapshot else 'null'
     scripts = '<script>window.__STATIC_PREVIEW__ = true;window.__DATA_SNAPSHOT__ = ' + data + ';</script>\n'
-    for asset in ('app.js', 'management.js', 'reports.js'):
+    for asset in ('app.js', 'management.js', 'reports.js', 'inventory.js'):
         # Inline source must not close its HTML script element prematurely.
         code = re.sub(r'</script', r'<\\/script', (static / asset).read_text(), flags=re.I)
         scripts += f'<script>{code}</script>\n'

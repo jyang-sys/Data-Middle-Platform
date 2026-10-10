@@ -5,3 +5,4 @@ cd "$(dirname "$0")/.."
 node --check app/static/app.js
 node --check app/static/management.js
 node --check app/static/reports.js
+node --check app/static/inventory.js
