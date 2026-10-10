@@ -67,6 +67,8 @@ def initialize():
         )""")
     from app.ingestion import initialize_storage
     initialize_storage()
+    from app.management import initialize_storage as initialize_management
+    initialize_management()
 
 
 @asynccontextmanager
@@ -294,3 +296,5 @@ from app.sales import router as sales_router
 app.include_router(sales_router)
 from app.ingestion import router as ingestion_router
 app.include_router(ingestion_router)
+from app.management import router as management_router
+app.include_router(management_router)
