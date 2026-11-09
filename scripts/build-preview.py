@@ -34,9 +34,16 @@ def capture(base_url):
     get('/api/allocations/view')
     latest = options['order_dates']['last_confirmed_created'] or options['order_dates']['last_created']
     end = datetime.fromtimestamp(latest, ZoneInfo('Asia/Shanghai')).date() if latest else datetime.now(ZoneInfo('Asia/Shanghai')).date()
+    if session.get('data_mode') == 'base_test':
+        end = datetime.now(ZoneInfo('Asia/Shanghai')).date()
     filters = {'start': (end-timedelta(days=13)).isoformat(), 'end': end.isoformat(), 'timezone': 'Asia/Shanghai',
                'date_basis': 'base_created', 'ownership_basis': 'saved', 'confirmed_only': 'true', 'granularity': 'company_product'}
+    if session.get('data_mode') == 'base_test':
+        filters['confirmed_only'] = 'false'
     analysis_filters = {**filters, 'start': (end-timedelta(days=29)).isoformat(), 'confirmed_only': 'false'}
+    if session.get('data_mode') == 'base_test' and options['order_dates']['first_created']:
+        first = datetime.fromtimestamp(options['order_dates']['first_created'], ZoneInfo('Asia/Shanghai')).date()
+        analysis_filters['start'] = max(end-timedelta(days=365), min(first, end-timedelta(days=29))).isoformat()
     analysis = []
     offset = 0
     while True:

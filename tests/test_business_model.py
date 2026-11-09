@@ -266,3 +266,20 @@ class BusinessModelTests(unittest.TestCase):
         fixture={'snapshot':{'captured_at':'2026-11-09','analysis':{'filters':{**self.params,'date_basis':'base_created'},'lines':source['lines']}},'cases':cases}
         result=subprocess.run(['node','scripts/check-snapshot-reports.cjs'],input=json.dumps(fixture),text=True,capture_output=True)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+
+    def test_source_tree_import_preserves_manual_links_and_rejects_cycles(self):
+        import importlib.util
+        spec=importlib.util.spec_from_file_location('base_tree_import',Path('scripts/import-base-product-tree.py'))
+        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+        self.assertEqual(module.import_tree(),0)
+        with main.database() as db:
+            db.execute("INSERT INTO base_products VALUES(1,20,0,'A','同名父体','{}','now',1)")
+            db.execute("INSERT INTO base_products VALUES(1,21,20,'A','同名规格','{}','now',1)")
+        self.assertEqual(module.import_tree(),2)
+        self.assertEqual(module.import_tree(),0)
+        with main.database() as db:
+            linked=db.execute("SELECT node_id FROM product_source_links WHERE domain='catalog' AND source_key='[1, 21]'").fetchone()[0]
+            row=db.execute('SELECT * FROM company_products WHERE id=?',(linked,)).fetchone()
+            self.assertNotEqual(row['id'],self.leaf['id']);self.assertIsNotNone(row['parent_id'])
+            db.execute('UPDATE base_products SET parent_id=21 WHERE product_id=20')
+        with self.assertRaises(ValueError):module.import_tree()

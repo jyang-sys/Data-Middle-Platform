@@ -9,6 +9,7 @@ function notice(message, error = false) {
   noticeTimer = setTimeout(() => { $('notice').hidden = true; }, 6500);
 }
 async function api(path, options = {}) {
+  if (window.baseTestReady) await window.baseTestReady;
   if (!window.__STATIC_PREVIEW__) await window.appAuthReady;
   let response;
   if (window.__DATA_SNAPSHOT__) {
