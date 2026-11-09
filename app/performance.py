@@ -379,4 +379,3 @@ def ownership_identity_filter(raw, id_field, text_field):
         raise ValueError()
     except (ValueError, TypeError):
         raise HTTPException(422, "归属维度键格式不正确。")
-
