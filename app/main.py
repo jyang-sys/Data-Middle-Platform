@@ -118,7 +118,7 @@ def index():
 def root_asset(asset_name: str):
     # Relative resources work at both / and /static/index.html, as well as
     # when the HTML is opened beside its assets in a file preview.
-    if asset_name not in {"style.css", "management.css", "app.js", "management.js", "reports.js", "reports.css", "inventory.js", "inventory.css", "performance.js", "auth.js", "business.css"}:
+    if asset_name not in {"style.css", "management.css", "app.js", "management.js", "reports.js", "reports.css", "inventory.js", "inventory.css", "performance.js", "auth.js", "business.css", "dashboard.js", "dashboard.css", "snapshot-reports.js"}:
         raise HTTPException(404, "资源不存在。")
     return FileResponse(ROOT / "static" / asset_name)
 

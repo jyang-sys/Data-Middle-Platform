@@ -36,6 +36,15 @@ def capture(base_url):
     end = datetime.fromtimestamp(latest, ZoneInfo('Asia/Shanghai')).date() if latest else datetime.now(ZoneInfo('Asia/Shanghai')).date()
     filters = {'start': (end-timedelta(days=13)).isoformat(), 'end': end.isoformat(), 'timezone': 'Asia/Shanghai',
                'date_basis': 'base_created', 'ownership_basis': 'saved', 'confirmed_only': 'true', 'granularity': 'company_product'}
+    analysis_filters = {**filters, 'start': (end-timedelta(days=29)).isoformat(), 'confirmed_only': 'false'}
+    analysis = []
+    offset = 0
+    while True:
+        batch = get('/api/reports/details?' + urlencode({**analysis_filters, 'limit':200, 'offset':offset}))
+        analysis.extend(batch['lines'])
+        offset += len(batch['lines'])
+        if offset >= batch['total'] or not batch['lines']:
+            break
     query = urlencode(filters)
     report = get('/api/reports/sales?' + query)
     scopes = [{}] + [{'month': row['month'], 'key_json': json.dumps(row['key'], ensure_ascii=False, separators=(',', ':'))} for row in report['monthly']]
@@ -52,21 +61,21 @@ def capture(base_url):
         stock = get('/api/stock-dashboard/summary?' + urlencode(params))
         for offset in range(50, stock['total_rows'], 50):
             get('/api/stock-dashboard/summary?' + urlencode({**params, 'offset': offset}))
-    return {'filters': filters, 'data_mode': session.get('data_mode', 'base'), 'captured_at': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(), 'responses': responses}
+    return {'filters': filters, 'data_mode': session.get('data_mode', 'base'), 'captured_at': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(), 'responses': responses, 'analysis': {'filters': analysis_filters, 'lines': analysis}}
 
 
 def build(destination, live_url=None, bundle=None):
     static = ROOT / 'app' / 'static'
     html = (static / 'index.html').read_text()
-    for asset in ('style.css', 'management.css', 'reports.css', 'inventory.css', 'business.css'):
+    for asset in ('style.css', 'management.css', 'reports.css', 'inventory.css', 'business.css', 'dashboard.css'):
         css = (static / asset).read_text()
         html = html.replace(f'<link rel="stylesheet" href="./{asset}">', f'<style>{css}</style>')
-    for asset in ('auth.js', 'app.js', 'management.js', 'reports.js', 'inventory.js', 'performance.js'):
+    for asset in ('auth.js', 'app.js', 'management.js', 'snapshot-reports.js', 'reports.js', 'inventory.js', 'performance.js', 'dashboard.js'):
         html = html.replace(f'<script src="./{asset}" defer></script>', '')
     snapshot = capture(live_url) if live_url else None
     data = json.dumps(snapshot, ensure_ascii=True).replace('<', r'\u003c') if snapshot else 'null'
     scripts = '<script>window.__STATIC_PREVIEW__ = true;window.__DATA_SNAPSHOT__ = ' + data + ';</script>\n'
-    for asset in ('auth.js', 'app.js', 'management.js', 'reports.js', 'inventory.js', 'performance.js'):
+    for asset in ('auth.js', 'app.js', 'management.js', 'snapshot-reports.js', 'reports.js', 'inventory.js', 'performance.js', 'dashboard.js'):
         # Inline source must not close its HTML script element prematurely.
         code = re.sub(r'</script', r'<\\/script', (static / asset).read_text(), flags=re.I)
         scripts += f'<script>{code}</script>\n'

@@ -12,7 +12,7 @@ function reportParams() {
 }
 function reportToday() { return new Intl.DateTimeFormat('en-CA', {timeZone: $('report-timezone').value, year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date()); }
 function recentReportDays(days) {
-  const end = reportToday(); const start = new Date(end + 'T00:00:00Z'); start.setUTCDate(start.getUTCDate() - days + 1);
+  const end = window.__DATA_SNAPSHOT__?.filters.end || reportToday(); const start = new Date(end + 'T00:00:00Z'); start.setUTCDate(start.getUTCDate() - days + 1);
   $('report-start').value = start.toISOString().slice(0, 10); $('report-end').value = end;
 }
 function reportOptions(id, rows, emptyLabel, label) {
@@ -78,6 +78,7 @@ async function refreshSalesReport() {
   table('report-unmapped', ['来源平台', '原 SKU', '销量', '操作'], data.unmapped.map(r => [r.platform, r.source_sku || '未提供 SKU', number(r.quantity), '']));
   reportAction('report-unmapped', data.unmapped, row => { if (!row.source_sku) { notice('该商品未提供 SKU，请先修正来源编码。', true); return; } editReportMapping({platform: row.platform, source_sku: row.source_sku, version: 0, product_type: '未分类'}); $('report-mapping-form').scrollIntoView({behavior: 'smooth'}); }, '维护映射');
   $('report-details').replaceChildren(); $('report-details-page').textContent = ''; $('report-detail-scope').textContent = '点击月度汇总行核对对应明细，或查看全部明细。';
+  if (typeof renderSalesHome === 'function') renderSalesHome(data);
   if (!window.appUser || window.appUser.role === 'admin') await loadReportMappings();
 }
 async function loadReportDetails(scope = null, offset = 0) {
@@ -133,7 +134,7 @@ $('report-mapping-form').addEventListener('submit', async event => {
     const body = {platform: $('mapping-platform').value, source_sku: $('mapping-sku').value.trim(), model: $('mapping-model').value.trim(), specification: $('mapping-spec').value.trim(), color: $('mapping-color').value.trim(), product_type: $('mapping-type').value.trim(), actor: $('mapping-actor').value.trim(), reason: $('mapping-reason').value.trim()};
     body.expected_version = reportState.mappingKey === JSON.stringify([body.platform, body.source_sku]) ? reportState.mappingVersion : 0;
     const saved = await api('/api/reports/mappings', managementJson('PUT', body)); editReportMapping(saved); notice('映射已保存。请重新查询销量以应用新映射。');
-    if (!window.appUser || window.appUser.role === 'admin') await loadReportMappings(); $('report-filter-changed').hidden = false;
+    await loadReportMappings(); $('report-filter-changed').hidden = false;
   } catch (error) { notice(error.message, true); }
 });
 $('mapping-reset').addEventListener('click', () => { $('report-mapping-form').reset(); reportState.mappingVersion = 0; reportState.mappingKey = null; $('mapping-version').textContent = '新增映射；已有映射请先从列表读取。'; });
@@ -149,7 +150,7 @@ $('mapping-next').addEventListener('click', () => loadReportMappings(reportState
 recentReportDays(7);
 if (window.__DATA_SNAPSHOT__) {
   const f = window.__DATA_SNAPSHOT__.filters; $('report-start').value = f.start; $('report-end').value = f.end; $('report-granularity').value = f.granularity;
-  $('report-form').querySelectorAll('input,select,button').forEach(el => el.disabled = true);
+  for (const id of ['report-timezone','report-date-basis','report-ownership']) $(id).disabled = true;
 }
 loadReportOptions().then(() => {
   if (!window.__DATA_SNAPSHOT__ && reportState.lastCreated) {

@@ -216,11 +216,12 @@ function renderPerformance(data) {
         const button = document.createElement("button");
         button.className = "button";
         button.textContent = "明细";
-        button.disabled = Boolean(window.__STATIC_PREVIEW__);
+      button.disabled = Boolean(window.__STATIC_PREVIEW__ && !window.__DATA_SNAPSHOT__?.analysis);
         button.addEventListener("click", (event) => {
           event.preventDefault();
           event.stopPropagation();
           businessRun(async () => {
+            if (typeof setHomeTab === 'function') setHomeTab('orders');
             await loadReportDetails(next);
             $("report-details").scrollIntoView({ behavior: "smooth" });
           });
