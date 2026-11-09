@@ -294,6 +294,7 @@ def report_lines(filters):
                 label = nodes[node_id]['name'] + ' · ' + nodes[node_id]['code']
                 key = ('company', str(node_id), '')
             lines.append({'order_id': order['order_id'], 'external_order_id': order['external_order_id'],
+                'confirmed': bool(order['confirmed']), 'status_id': order['status_id'],
                 'position': item['position'], 'date': day.isoformat(), 'month': day.strftime('%Y-%m'),
                 'platform': order['platform'], 'platform_name': platform_name(order['platform']),
                 'shop_id': order['shop_id'], 'shop_name': order['shop_name'] or order['shop_id'],
@@ -302,7 +303,7 @@ def report_lines(filters):
                 'company_sku': nodes[node_id]['code'] if node_id else None,
                 'source_sku': item['sku'], 'source_name': source_name, 'parent_sku': parent['sku'] if parent else None,
                 'inventory_id': product['inventory_id'] if product else None, 'product_id': product['product_id'] if product else None, 'model': model, 'specification': specification, 'color': color,
-                'product_type': product_type, 'label': label, 'quantity': int(quantity), 'mapped': is_mapped,
+                'product_type': product_type, 'label': label, 'quantity': int(quantity), 'mapped': is_mapped, 'business_mapped': mapping is not None,
                 'key': key})
     from app.access import privileged
     if not privileged():

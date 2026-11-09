@@ -13,6 +13,7 @@ async function api(path, options = {}) {
   let response;
   if (window.__DATA_SNAPSHOT__) {
     const url = new URL(path, 'http://snapshot.local'); url.searchParams.sort();
+    if ((!options.method || options.method === 'GET') && typeof snapshotSalesApi === 'function') { const result = snapshotSalesApi(url); if (result !== null) return result; }
     const key = url.pathname + (url.search ? url.search : '');
     if ((!options.method || options.method === 'GET') && Object.hasOwn(window.__DATA_SNAPSHOT__.responses, key)) return structuredClone(window.__DATA_SNAPSHOT__.responses[key]);
     throw new Error('当前为真实数据只读快照；修改条件、同步和保存请打开运行中的中台服务。');
@@ -41,7 +42,7 @@ function switchTab(id) {
   window.scrollTo({top: 0});
   document.querySelectorAll('.view').forEach((view) => { view.hidden = view.id !== id; });
   document.querySelectorAll('[data-tab]').forEach((button) => button.classList.toggle('active', button.dataset.tab === id));
-  $('breadcrumb').textContent = {'sales-report': '销量试算报表', 'stock-dashboard': '多仓库存看板', dashboard: '旧版销售分析', connection: '数据接入', datasets: '表格工具', 'base-data': '中台基础数据', ownership: '员工与归属', catalog: '产品中心'}[id];
+  $('breadcrumb').textContent = {'sales-report': '销售总览', 'stock-dashboard': '多仓库存看板', dashboard: '旧版销售分析', connection: '数据接入', datasets: '表格工具', 'base-data': '中台基础数据', ownership: '员工与归属', catalog: '产品中心'}[id];
   if (id === 'sales-report') loadReportOptions().then(() => refreshSalesReport()).catch((error) => notice(error.message, true));
   if (id === 'catalog') refreshCompanyCatalog().catch(error => notice(error.message, true));
   if (id === 'stock-dashboard') refreshInventoryBusiness().catch(error => notice(error.message, true));

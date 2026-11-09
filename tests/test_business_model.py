@@ -2,6 +2,8 @@ import io
 import json
 import tempfile
 import unittest
+import subprocess
+from urllib.parse import urlencode
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -242,3 +244,25 @@ class BusinessModelTests(unittest.TestCase):
         with patch.dict('os.environ',{'APP_REQUIRE_LOGIN':'1'}):
             self.assertEqual(self.client.get('/api/reports/sales').status_code,401)
             self.assertEqual(self.client.get('/api/auth/session').status_code,200)
+
+    def test_snapshot_browser_aggregations_match_scoped_api(self):
+        self.rule(self.employees[0]['id'])
+        self.seed_order(1)
+        self.seed_order(2,[{'sku':'B','quantity':3,'storage':'db','storage_id':1,'product_id':11}],order_source='ebay')
+        self.seed_order(3,confirmed=False)
+        self.seed_order(4,[{'sku':'OTHER','quantity':4,'storage':'db','storage_id':1,'product_id':14}])
+        self.seed_order(5,[{'sku':'UNKNOWN','quantity':1}])
+        source=self.client.get('/api/reports/details',params={**self.params,'confirmed_only':'false','limit':200}).json()
+        cases=[]
+        for changes in [{},{'confirmed_only':'false'},{'platform':'ebay'},{'platform':'amazon','shop_id':'1'},
+                        {'group_id':self.groups[0]['id']},{'employee_id':self.employees[0]['id']},
+                        {'node_id':self.root['id']},{'source_sku':'UNKNOWN'},{'status_ids':99},
+                        {'granularity':'source_product'},{'granularity':'model'},{'granularity':'specification'}]:
+            params={**self.params,**changes}
+            expected=self.client.get('/api/reports/sales',params=params)
+            self.assertEqual(expected.status_code,200,expected.text)
+            detail=self.client.get('/api/reports/details',params={**params,'limit':1,'offset':1}).json()
+            cases.append({'query':urlencode(params,doseq=True),'expected':expected.json(),'detail':detail})
+        fixture={'snapshot':{'captured_at':'2026-11-09','analysis':{'filters':{**self.params,'date_basis':'base_created'},'lines':source['lines']}},'cases':cases}
+        result=subprocess.run(['node','scripts/check-snapshot-reports.cjs'],input=json.dumps(fixture),text=True,capture_output=True)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
