@@ -19,6 +19,7 @@ def prepare(snapshot_path, site_directory):
     html = html.replace('<style>', '<style>body [data-admin]{display:none!important}', 1)
     html = html.replace('<button id="account-button" class="button">账号</button>', '<span class="home-pill">在线演示</span>')
     html = html.replace('本地开发版', '演示环境')
+    html = re.sub(r'(?m)^[\t ]+$', '', html)
     dist = site_directory / 'dist'
     dist.mkdir(parents=True, exist_ok=True)
     (dist / 'index.html').write_text(html)
