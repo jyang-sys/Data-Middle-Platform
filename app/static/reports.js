@@ -1,9 +1,9 @@
 const reportState = {request: 0, params: null, data: null, detailKey: null, detailOffset: 0, detailTotal: 0, mappingRequest: 0, mappingOffset: 0, mappingVersion: 0, mappingKey: null, shops: [], orderDates: null, lastCreated: null};
 function reportParams() {
   const values = {start: $('report-start').value, end: $('report-end').value, timezone: $('report-timezone').value, date_basis: $('report-date-basis').value,
-    confirmed_only: $('report-confirmed').checked, granularity: $('report-granularity').value};
+    ownership_basis: $('report-ownership').value, confirmed_only: $('report-confirmed').checked, granularity: $('report-granularity').value};
   const params = new URLSearchParams(values);
-  for (const [field, id] of [['platform', 'report-platform'], ['shop_id', 'report-shop'], ['group_id', 'report-group'], ['employee_id', 'report-employee'], ['model', 'report-model'], ['source_sku', 'report-sku'], ['product_type', 'report-type']]) {
+  for (const [field, id] of [['node_id', 'report-node'], ['platform', 'report-platform'], ['shop_id', 'report-shop'], ['group_id', 'report-group'], ['employee_id', 'report-employee'], ['model', 'report-model'], ['source_sku', 'report-sku'], ['product_type', 'report-type']]) {
     if ($(id).value.trim()) params.set(field, $(id).value.trim());
   }
   const statuses = $('report-statuses').value.trim();
@@ -57,15 +57,16 @@ async function refreshSalesReport() {
   $('report-export').href = '/api/reports/export?' + params; $('report-export').setAttribute('aria-disabled', window.__DATA_SNAPSHOT__ ? 'true' : 'false');
   $('report-units').textContent = number(data.total_units); $('report-orders').textContent = number(data.order_count);
   $('report-lines').textContent = number(data.line_count); $('report-unmapped-count').textContent = number(data.diagnostics.unmapped_lines);
+  if (typeof renderPerformance === 'function') renderPerformance(data.comparisons);
   const platforms = data.platforms;
   const monthlyRows = data.monthly.map(r => [r.month, r.product_type, r.label, ...platforms.map(p => number(r.platforms[p.id] || 0)), number(r.total), '']);
   if (monthlyRows.length) monthlyRows.push(['期间合计', '', '', ...platforms.map(p => number(data.monthly.reduce((sum, r) => sum + (r.platforms[p.id] || 0), 0))), number(data.total_units), '']);
   table('report-monthly', ['月份', '产品类型', '型号 / 规格', ...platforms.map(p => p.name), '总计', '核对'], monthlyRows);
   reportAction('report-monthly', data.monthly, row => loadReportDetails({month: row.month, key_json: JSON.stringify(row.key), label: row.label}));
   if (!window.__DATA_SNAPSHOT__) $('report-monthly').querySelectorAll('tbody tr').forEach((tr,index) => {
-    const row = data.monthly[index]; if (!row || row.key[0] !== 'source' || row.key.length !== 3) return;
+    const row = data.monthly[index]; if (!row || !['source','company'].includes(row.key[0]) || row.key.length !== 3) return;
     const button = document.createElement('button'); button.className = 'button'; button.textContent = '查库存';
-    button.addEventListener('click', () => linkSourceStock(row.key).catch(error => notice(error.message,true)));tr.lastElementChild.append(button);
+    button.addEventListener('click', () => (row.key[0] === 'company' ? linkCompanyInventory(Number(row.key[1])) : linkSourceStock(row.key)).catch(error => notice(error.message,true)));tr.lastElementChild.append(button);
   });
   const dailyRows = data.daily.map(r => [r.date, ...platforms.map(p => number(r.platforms[p.id] || 0)), number(r.total)]);
   dailyRows.push(['期间合计', ...platforms.map(p => number(data.daily.reduce((sum, r) => sum + (r.platforms[p.id] || 0), 0))), number(data.total_units)]);
@@ -77,7 +78,7 @@ async function refreshSalesReport() {
   table('report-unmapped', ['来源平台', '原 SKU', '销量', '操作'], data.unmapped.map(r => [r.platform, r.source_sku || '未提供 SKU', number(r.quantity), '']));
   reportAction('report-unmapped', data.unmapped, row => { if (!row.source_sku) { notice('该商品未提供 SKU，请先修正来源编码。', true); return; } editReportMapping({platform: row.platform, source_sku: row.source_sku, version: 0, product_type: '未分类'}); $('report-mapping-form').scrollIntoView({behavior: 'smooth'}); }, '维护映射');
   $('report-details').replaceChildren(); $('report-details-page').textContent = ''; $('report-detail-scope').textContent = '点击月度汇总行核对对应明细，或查看全部明细。';
-  await loadReportMappings();
+  if (!window.appUser || window.appUser.role === 'admin') await loadReportMappings();
 }
 async function loadReportDetails(scope = null, offset = 0) {
   if (!reportState.params) throw new Error('请先查询报表。');
@@ -85,13 +86,14 @@ async function loadReportDetails(scope = null, offset = 0) {
   reportState.detailOffset = offset;
   const params = new URLSearchParams(reportState.params); params.set('limit', '50'); params.set('offset', offset);
   const scopeKey = reportState.detailKey;
-  if (scopeKey) { if (scopeKey.month) params.set('month', scopeKey.month); if (scopeKey.key_json) params.set('key_json', scopeKey.key_json); }
+  if (scopeKey) { for (const name of ['month','key_json','platform','shop_id','group_key_json','employee_key_json','node_id']) if (scopeKey[name] !== undefined) params.set(name, scopeKey[name]); }
   const request = reportState.request;
   const data = await api('/api/reports/details?' + params);
   if (request !== reportState.request || offset !== reportState.detailOffset || scopeKey !== reportState.detailKey) return;
   reportState.detailTotal = data.total;
-  $('report-detail-scope').textContent = `${scopeKey ? scopeKey.month + ' · ' + scopeKey.label : '本次查询全部明细'} · 合计 ${number(data.total_units)} 件`;
-  table('report-details', ['日期', 'Base 订单 ID', '平台订单号', '平台', '店铺', '负责人', '销售小组', '原 SKU', '来源产品名称', '父 SKU', '型号', '配置', '颜色', '销量'], data.lines.map(r => [r.date, r.order_id, r.external_order_id, r.platform_name, r.shop_name, r.sales_owner || '未分配', r.business_group || '未分配', r.source_sku, r.source_name, r.parent_sku, r.model, r.specification, r.color, number(r.quantity)]));
+  $('report-detail-scope').textContent = `${scopeKey ? [scopeKey.month, scopeKey.label].filter(Boolean).join(' · ') : '本次查询全部明细'} · 合计 ${number(data.total_units)} 件`;
+  table('report-details', ['日期', 'Base 订单 ID', '平台订单号', '平台', '店铺', '负责人', '销售小组', '原 SKU', '来源产品名称', '父 SKU', '型号', '配置', '颜色', '销量', '归属来源', '规则 ID', '规则版本'], data.lines.map(r => [r.date, r.order_id, r.external_order_id, r.platform_name, r.shop_name, r.sales_owner || '未分配', r.business_group || '未分配', r.source_sku, r.source_name, r.parent_sku, r.model, r.specification, r.color, number(r.quantity), {order:'订单归属',snapshot:'已保存明细归属',line_manual:'人工明细归属',rule:'规则试算',unassigned:'未分配'}[r.ownership_source] || '—', r.rule_id, r.rule_version]));
+  if (typeof addLineOwnerActions === 'function') addLineOwnerActions(data.lines);
   $('report-details-page').textContent = `${offset + (data.total ? 1 : 0)}–${Math.min(offset + 50, data.total)} / ${data.total} 条`;
   $('report-details-prev').disabled = offset === 0; $('report-details-next').disabled = offset + 50 >= data.total;
 }
@@ -108,7 +110,7 @@ async function loadReportMappings(offset = reportState.mappingOffset) {
   reportState.mappingOffset = offset;
   const data = await api('/api/reports/mappings?' + new URLSearchParams({limit: 50, offset, search: $('mapping-search').value.trim()}));
   if (request !== reportState.mappingRequest) return;
-  table('report-mappings', ['平台范围', '原 SKU', '型号', '配置', '颜色', '产品类型', '版本', '操作'], data.mappings.map(r => [r.platform, r.source_sku, r.source_name, r.parent_sku, r.model, r.specification, r.color, r.product_type, r.version, '']));
+  table('report-mappings', ['平台范围', '原 SKU', '型号', '配置', '颜色', '产品类型', '版本', '操作'], data.mappings.map(r => [r.platform, r.source_sku, r.model, r.specification, r.color, r.product_type, r.version, '']));
   reportAction('report-mappings', data.mappings, editReportMapping, '编辑');
   $('mapping-page').textContent = `${offset + (data.total ? 1 : 0)}–${Math.min(offset + 50, data.total)} / ${data.total}`;
   $('mapping-prev').disabled = offset === 0; $('mapping-next').disabled = offset + 50 >= data.total;
@@ -131,7 +133,7 @@ $('report-mapping-form').addEventListener('submit', async event => {
     const body = {platform: $('mapping-platform').value, source_sku: $('mapping-sku').value.trim(), model: $('mapping-model').value.trim(), specification: $('mapping-spec').value.trim(), color: $('mapping-color').value.trim(), product_type: $('mapping-type').value.trim(), actor: $('mapping-actor').value.trim(), reason: $('mapping-reason').value.trim()};
     body.expected_version = reportState.mappingKey === JSON.stringify([body.platform, body.source_sku]) ? reportState.mappingVersion : 0;
     const saved = await api('/api/reports/mappings', managementJson('PUT', body)); editReportMapping(saved); notice('映射已保存。请重新查询销量以应用新映射。');
-    await loadReportMappings(); $('report-filter-changed').hidden = false;
+    if (!window.appUser || window.appUser.role === 'admin') await loadReportMappings(); $('report-filter-changed').hidden = false;
   } catch (error) { notice(error.message, true); }
 });
 $('mapping-reset').addEventListener('click', () => { $('report-mapping-form').reset(); reportState.mappingVersion = 0; reportState.mappingKey = null; $('mapping-version').textContent = '新增映射；已有映射请先从列表读取。'; });

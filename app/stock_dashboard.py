@@ -36,6 +36,13 @@ def options():
     for warehouse in warehouses:
         warehouse['country'] = json.loads(warehouse.pop('warehouse_json') or '{}').get('country') or None
         warehouse['provider'] = warehouse['account'] = None
+    from app.access import privileged
+    if not privileged():
+        from app.allocations import view
+        visible = view(inventory_id=None, node_id=None, warehouse_key=None, group_id=None, platform=None, search='')['rows']
+        identities = {(r['inventory_id'], r['warehouse_key']) for r in visible}
+        warehouses = [w for w in warehouses if (w['inventory_id'], w['id']) in identities]
+        catalogs = [{**c, 'rows': sum(r['inventory_id'] == c['id'] for r in visible)} for c in catalogs if any(r['inventory_id'] == c['id'] for r in visible)]
     default = common['id'] if common and any(c['id'] == common['id'] for c in catalogs) else catalogs[0]['id'] if catalogs else None
     return {'catalogs': catalogs, 'warehouses': warehouses, 'default_catalog': default}
 
@@ -83,6 +90,18 @@ def summary(inventory_id: int = Query(ge=1), warehouse_key: str | None = None, s
 def dataset(inventory_id: int = Query(ge=1)):
     """Complete selected-catalog snapshot for client filtering and inventory matrix."""
     from app.main import database
+    from app.access import privileged
+    if not privileged():
+        from app.allocations import view
+        visible = view(inventory_id=inventory_id, node_id=None, warehouse_key=None, group_id=None, platform=None, search='')
+        with database() as db:
+            catalog = db.execute('SELECT inventory_id,name FROM base_catalogs WHERE inventory_id=?', (inventory_id,)).fetchone()
+        if catalog is None:
+            raise HTTPException(404, '库存目录不存在。')
+        for row in visible['rows']:
+            row.update(provider=None, account=None, external_sku=None)
+        return {'catalog': dict(catalog), 'rows': visible['rows'], 'total_rows': len(visible['rows']),
+                'physical_stock': None, 'available_stock': None, 'in_transit': None, 'platform_saleable': None, 'last_sync': None}
     with database() as db:
         db.execute('BEGIN')
         catalog = db.execute('SELECT inventory_id,name FROM base_catalogs WHERE inventory_id=?', (inventory_id,)).fetchone()

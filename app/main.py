@@ -71,6 +71,14 @@ def initialize():
     initialize_management()
     from app.reports import initialize_storage as initialize_reports
     initialize_reports()
+    from app.catalog import initialize_storage as initialize_catalog
+    initialize_catalog()
+    from app.performance import initialize_storage as initialize_performance
+    initialize_performance()
+    from app.allocations import initialize_storage as initialize_allocations
+    initialize_allocations()
+    from app.access import initialize_storage as initialize_access
+    initialize_access()
 
 
 @asynccontextmanager
@@ -81,6 +89,12 @@ async def lifespan(app):
 
 app = FastAPI(title="数据中台 · 基础版", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=ROOT / "static"), name="static")
+
+
+@app.middleware('http')
+async def access_control(request: Request, call_next):
+    from app.access import authorize
+    return await authorize(request, call_next)
 
 
 @app.middleware("http")
@@ -104,7 +118,7 @@ def index():
 def root_asset(asset_name: str):
     # Relative resources work at both / and /static/index.html, as well as
     # when the HTML is opened beside its assets in a file preview.
-    if asset_name not in {"style.css", "management.css", "app.js", "management.js", "reports.js", "reports.css", "inventory.js", "inventory.css"}:
+    if asset_name not in {"style.css", "management.css", "app.js", "management.js", "reports.js", "reports.css", "inventory.js", "inventory.css", "performance.js", "auth.js", "business.css"}:
         raise HTTPException(404, "资源不存在。")
     return FileResponse(ROOT / "static" / asset_name)
 
@@ -315,3 +329,12 @@ from app.reports import router as reports_router
 app.include_router(reports_router)
 from app.stock_dashboard import router as stock_dashboard_router
 app.include_router(stock_dashboard_router)
+
+from app.performance import router as performance_router
+app.include_router(performance_router)
+from app.catalog import router as catalog_router
+app.include_router(catalog_router)
+from app.allocations import router as allocations_router
+app.include_router(allocations_router)
+from app.access import router as access_router
+app.include_router(access_router)

@@ -5,12 +5,15 @@
   <title>销售数据中台 · BaseLinker</title>
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./management.css">
+  <script src="./auth.js" defer></script>
   <script src="./app.js" defer></script>
   <script src="./management.js" defer></script>
   <link rel="stylesheet" href="./reports.css">
   <link rel="stylesheet" href="./inventory.css">
+  <link rel="stylesheet" href="./business.css">
   <script src="./reports.js" defer></script>
   <script src="./inventory.js" defer></script>
+  <script src="./performance.js" defer></script>
 </head>
 <body>
   <aside class="sidebar">
@@ -18,15 +21,16 @@
     <div class="nav-label">工作空间</div>
     <button class="nav active" data-tab="sales-report">◈ <span>销量试算报表</span></button>
     <button class="nav" data-tab="stock-dashboard">▦ <span>库存中心</span></button>
-    <button class="nav" data-tab="dashboard">◈ <span>旧版销售分析</span></button>
-    <button class="nav" data-tab="connection">⇄ <span>数据接入</span></button>
-    <button class="nav" data-tab="base-data">▦ <span>中台基础数据</span></button>
-    <button class="nav" data-tab="ownership">♧ <span>员工与归属</span></button>
-    <button class="nav" data-tab="datasets">▤ <span>表格工具</span></button>
+    <button class="nav" data-tab="dashboard" data-admin>◈ <span>旧版销售分析</span></button>
+    <button class="nav" data-tab="connection" data-admin>⇄ <span>数据接入</span></button>
+    <button class="nav" data-tab="base-data" data-admin>▦ <span>中台基础数据</span></button>
+    <button class="nav" data-tab="catalog">▤ <span>产品中心</span></button>
+    <button class="nav" data-tab="ownership" data-admin>♧ <span>员工与归属</span></button>
+    <button class="nav" data-tab="datasets" data-admin>▤ <span>表格工具</span></button>
     <div class="sidebar-bottom"><span class="dot"></span>本地开发版<small>BaseLinker · SQLite</small></div>
   </aside>
   <main>
-    <header><span>工作空间 <span class="slash">/</span> <span id="breadcrumb">销量试算报表</span></span><span class="edition">基础版 · 单用户</span></header>
+    <header><span>工作空间 <span class="slash">/</span> <span id="breadcrumb">销量试算报表</span></span><button id="account-button" class="button">账号</button></header>
     <div id="preview-banner" class="banner" role="status" hidden>界面预览未连接数据服务。此处可查看页面布局；真实数据查询与维护需通过已启动的中台服务打开。</div>
     <section id="sales-report" class="view">
       <div class="heading"><div><div class="eyebrow">UNIT SALES REPORT</div><h1>销量试算报表</h1><p>沿用手工报表的型号、平台和每日销量布局，汇总可核对到订单明细。</p></div><a id="report-export" class="button primary" aria-disabled="true">导出 Excel</a></div>
@@ -35,22 +39,26 @@
         <label>开始日期<input type="date" id="report-start" required></label><label>结束日期<input type="date" id="report-end" required></label>
         <label>月份快捷查询<input type="month" id="report-month"></label><label>时区<select id="report-timezone"><option value="Asia/Shanghai">Asia/Shanghai</option><option value="UTC">UTC</option><option value="Europe/Warsaw">Europe/Warsaw</option><option value="America/New_York">America/New_York</option></select></label>
         <label>订单日期口径<select id="report-date-basis"><option value="base_created">Base 创建时间（试算）</option><option value="platform_order">维护的平台订单日期</option></select></label>
-        <label>汇总层级<select id="report-granularity"><option value="source_product">系统产品（目录 / 产品 ID）</option><option value="specification">业务配置与颜色</option><option value="model">型号合计</option></select></label>
+        <label>汇总层级<select id="report-granularity"><option value="company_product">公司产品层级</option><option value="source_product">系统产品（目录 / 产品 ID）</option><option value="specification">业务配置与颜色</option><option value="model">型号合计</option></select></label>
         <label>平台<select id="report-platform"><option value="">全部平台</option></select></label><label>店铺<select id="report-shop"><option value="">全部店铺</option></select></label>
-        <label>销售小组<select id="report-group"><option value="">全部小组</option></select></label><label>销售负责人<select id="report-employee"><option value="">全部人员</option></select></label>
-        <label>型号<input id="report-model" placeholder="输入映射后的型号"></label><label>原 SKU<input id="report-sku" placeholder="精确匹配原 SKU"></label>
+        <label>业绩归属口径<select id="report-ownership"><option value="saved">已保存订单归属</option><option value="rules">店铺 / SKU 规则试算</option></select></label><label>销售小组<select id="report-group"><option value="">全部小组</option></select></label><label>销售负责人<select id="report-employee"><option value="">全部人员</option></select></label>
+        <label>公司产品<select id="report-node"><option value="">全部父体 / 规格</option></select></label><label>型号<input id="report-model" placeholder="输入映射后的型号"></label><label>原 SKU<input id="report-sku" placeholder="精确匹配原 SKU"></label>
         <label>产品类型<input id="report-type" placeholder="手机 / 平板 / 其他"></label><label>计入状态 ID<input id="report-statuses" placeholder="留空为全部状态，或用逗号分隔"></label>
         <label class="check-label"><input type="checkbox" id="report-confirmed" checked>仅已确认订单</label>
       </div><div class="actions"><button type="button" class="button" data-report-days="3">最近 3 天</button><button type="button" class="button" data-report-days="7">最近 7 天</button><button type="button" class="button" data-report-days="14">最近 14 天</button><button type="button" class="button" id="report-latest">最近有订单的 14 天</button><button type="submit" class="button primary">查询销量</button></div></form><p id="report-filter-changed" class="muted" hidden>筛选条件已修改，请重新查询。当前表格及导出仍使用上次查询条件。</p></article>
       <div class="metrics"><article class="metric"><span>商品销量</span><strong id="report-units">—</strong><small>件数合计</small></article><article class="metric"><span>计入订单</span><strong id="report-orders">—</strong><small>按 Base 订单 ID 去重</small></article><article class="metric"><span>商品明细</span><strong id="report-lines">—</strong><small>所有视图共用同一明细</small></article><article class="metric"><span>未映射商品明细</span><strong id="report-unmapped-count">—</strong><small>保留原 SKU 单独显示</small></article></div>
+      <article class="panel"><div class="panel-heading"><h2>公司产品层级销量</h2></div><div id="performance-hierarchy" class="performance-tree"></div></article>
+      <article class="panel"><div class="panel-heading"><h2>平台与店铺对比</h2></div><div id="performance-platforms" class="performance-tree"></div></article>
+      <article class="panel"><div class="panel-heading"><h2>产品跨平台与店铺销售</h2></div><div id="performance-products" class="performance-tree"></div></article>
+      <article class="panel"><div class="panel-heading"><h2>小组与人员业绩</h2></div><div id="performance-teams" class="performance-tree"></div></article>
       <article class="panel"><div class="panel-heading"><h2>型号与平台月度销量</h2><span class="muted">按年月分组，月内按销量排序</span></div><div class="table-wrap" id="report-monthly"></div></article>
       <article class="panel"><div class="panel-heading"><h2>全平台每日销量</h2><span class="muted">每日合计与期间总量一致</span></div><div id="report-trend"></div><div class="table-wrap" id="report-daily"></div></article>
       <article class="panel"><div class="panel-heading"><h2>各平台商品每日销量</h2><span class="muted">产品类型 · 型号 / 规格 · 每日件数</span></div><div class="table-wrap" id="report-product-daily"></div></article>
       <div class="two-columns"><article class="panel"><div class="panel-heading"><h2>小组销量</h2></div><div class="table-wrap" id="report-groups"></div></article><article class="panel"><div class="panel-heading"><h2>人员销量</h2></div><div class="table-wrap" id="report-employees"></div></article></div>
       <article class="panel"><div class="panel-heading"><h2>店铺销量</h2></div><div class="table-wrap" id="report-shops"></div></article>
       <article class="panel instructions"><h2>订单明细核对</h2><p id="report-detail-scope" class="muted">点击月度汇总行的“核对明细”，或查看全部明细。</p><button id="report-all-details" class="button">查看全部明细</button><div class="table-wrap" id="report-details"></div><div class="actions"><button id="report-details-prev" class="button">上一页</button><span id="report-details-page" class="muted"></span><button id="report-details-next" class="button">下一页</button></div></article>
-      <article class="panel instructions"><h2>未映射 SKU</h2><p class="muted">不同平台的未知编码保持分开；确认它们对应同一规格后再维护映射。</p><div class="table-wrap" id="report-unmapped"></div></article>
-      <article class="panel instructions"><h2>型号与规格映射</h2><p class="muted">映射不改写 Base 产品或订单。同规格的多个编码可指向相同型号、配置、颜色；模板中的多配置合并名称不会自动拆分。</p>
+      <article class="panel instructions" data-admin><h2>未映射 SKU</h2><p class="muted">不同平台的未知编码保持分开；确认它们对应同一规格后再维护映射。</p><div class="table-wrap" id="report-unmapped"></div></article>
+      <article class="panel instructions" data-admin><h2>型号与规格映射</h2><p class="muted">映射不改写 Base 产品或订单。同规格的多个编码可指向相同型号、配置、颜色；模板中的多配置合并名称不会自动拆分。</p>
         <form id="report-mapping-form"><div class="form-grid"><label>来源平台<select id="mapping-platform"><option value="*">全部平台（同编码通用）</option></select></label><label>原 SKU<input id="mapping-sku" required maxlength="200"></label><label>统一型号<input id="mapping-model" required maxlength="100" placeholder="例：C51"></label><label>配置<input id="mapping-spec" maxlength="100" placeholder="例：128+6，请按业务口径填写"></label><label>颜色<input id="mapping-color" maxlength="100" placeholder="蓝色"></label><label>产品类型<input id="mapping-type" required maxlength="100" value="未分类" placeholder="手机 / 平板"></label><label>操作人<input id="mapping-actor" required maxlength="100"></label><label>变更原因<input id="mapping-reason" maxlength="500"></label></div><div class="actions"><button class="button primary" type="submit">保存映射</button><button class="button" id="mapping-reset" type="button">新增 / 重置</button><button class="button" id="mapping-history" type="button">查看映射历史</button></div><p id="mapping-version" class="muted">新增映射；已有映射请先从列表读取。</p></form>
         <div class="actions"><label>查询映射<input id="mapping-search" placeholder="SKU 或型号"></label><button class="button" id="mapping-search-button">查询</button></div><div class="table-wrap" id="report-mappings"></div><div class="actions"><button class="button" id="mapping-prev">上一页</button><span class="muted" id="mapping-page"></span><button class="button" id="mapping-next">下一页</button></div><div class="table-wrap" id="report-mapping-history"></div>
       </article>
@@ -114,6 +122,19 @@
         <article class="panel instructions"><h2>员工</h2><form id="employee-form"><input id="employee-id" type="hidden"><div class="form-grid"><label>员工编号<input id="employee-code" maxlength="40" pattern="[A-Za-z0-9_-]+" required placeholder="EMP-01"></label><label>姓名<input id="employee-name" maxlength="100" required></label><label>所属小组<select id="employee-group"></select></label><label class="check-label"><input id="employee-active" type="checkbox" checked>在职 / 启用</label></div><div class="actions"><button class="button primary" type="submit">保存员工</button><button class="button" type="reset">新增 / 重置</button></div></form><div id="employee-table" class="table-wrap"></div></article>
       </div>
       <article class="panel instructions"><h2>店铺默认归属</h2><p>配置不会自动改写已有订单。单笔维护中可载入店铺建议后确认保存。</p><div id="ownership-shops" class="table-wrap"></div><form id="shop-form"><div class="form-grid"><label>店铺<select id="ownership-shop" required></select></label><label>默认负责人<select id="shop-employee"></select></label><label>默认小组<select id="shop-group"></select></label></div><div class="actions"><button class="button primary" type="submit">保存店铺归属</button><button type="button" id="shop-history" class="button">查看店铺历史</button></div><p id="shop-version" class="muted"></p></form></article>
+      <article class="panel instructions"><div class="panel-heading"><h2>店铺与 SKU 业绩规则</h2><button id="performance-refresh" type="button" class="button">刷新规则</button></div>
+      <form id="assignment-form"><input id="assignment-id" type="hidden"><div class="form-grid">
+      <label>规则类型<select id="assignment-scope"><option value="sku">SKU 规则</option><option value="shop">店铺规则</option></select></label>
+      <label>平台范围<select id="assignment-platform"><option value="">全部平台</option></select></label>
+      <label>店铺范围<select id="assignment-shop"><option value="">全部店铺</option></select></label>
+      <label>精确来源 SKU<input id="assignment-sku" maxlength="200"></label>
+      <label>公司产品规则<select id="assignment-node"><option value="">使用来源 SKU</option></select></label><label>产品库存目录<select id="assignment-catalog"><option value="0">全部目录</option></select></label>
+      <label>生效日期<input id="assignment-start" type="date" required></label><label>结束日期<input id="assignment-end" type="date"></label>
+      <label>销售小组<select id="assignment-group"><option value="">未分配</option></select></label>
+      <label>销售负责人<select id="assignment-employee"><option value="">未分配</option></select></label>
+      <label class="check-label"><input id="assignment-active" type="checkbox" checked>启用</label>
+      </div><div class="actions"><button type="submit" class="button primary">保存规则</button><button id="assignment-reset" type="button" class="button">新增 / 重置</button><button id="assignment-history" type="button" class="button">变更历史</button></div><p id="assignment-version" class="muted">新规则</p></form>
+      <div class="actions"><button id="assignment-preview" type="button" class="button">预览本次销量范围的历史补分配</button><button id="assignment-apply" type="button" class="button primary" disabled>保存已预览归属</button><span id="assignment-preview-summary" class="muted"></span></div><div id="assignment-preview-table" class="table-wrap"></div><div id="assignment-table" class="table-wrap"></div><div id="assignment-history-table" class="table-wrap"></div></article>
       <article class="panel instructions"><h2>订单归属 · 单笔维护</h2><form id="order-form"><div class="form-grid"><label>Base 订单 ID<input id="ownership-order-id" type="number" min="1" required></label><label>销售负责人<select id="order-employee"></select></label><label>业务小组<select id="order-group"></select></label></div><label for="order-extra">本地附加字段 JSON</label><textarea id="order-extra">{}</textarea><div class="actions"><button type="button" class="button" id="order-load">读取当前归属</button><button type="button" class="button" id="order-defaults">载入店铺建议</button><button type="submit" class="button primary">保存订单归属</button><button type="button" class="button" id="order-history">查看订单历史</button></div><p id="order-version" class="muted">请先读取当前归属；已有文本归属会显示并保留，除非显式更改。</p></form></article>
       <article class="panel instructions"><h2>订单归属 · 批量维护</h2><div class="filters"><label>按平台 / 店铺筛选<select id="order-shop-filter"></select></label><label>按小组筛选<select id="order-group-filter"></select></label><label class="check-label"><input type="checkbox" id="order-unassigned">仅未分配负责人</label><button id="order-search" class="button">查询</button></div><div id="ownership-orders" class="table-wrap"></div><div class="actions"><button id="orders-prev" class="button">上一页</button><span id="orders-page" class="muted"></span><button id="orders-next" class="button">下一页</button><button id="orders-select-all" class="button">选择 / 取消本页</button></div><form id="batch-form"><div class="form-grid"><label>销售负责人<select id="batch-employee"></select></label><label>业务小组<select id="batch-group"></select></label></div><div class="actions"><button class="button primary" type="submit">确认批量保存</button><span id="batch-selected" class="muted">已选 0 笔</span></div></form><p class="muted">批量只修改选定字段，不覆盖附加字段；选员工且小组保持不变时，将采用该员工当前所属小组。任一版本冲突或无效订单将整批取消。</p></article>
       <article class="panel instructions"><h2 id="history-title">归属变更历史</h2><div id="ownership-history" class="table-wrap"><p class="muted">选择订单、店铺、员工或小组查看历史。</p></div><div class="actions"><button class="button" id="history-prev">上一页</button><span id="history-page" class="muted"></span><button class="button" id="history-next">下一页</button></div></article>
@@ -125,6 +146,7 @@
       <article class="panel"><div class="panel-heading"><h2 id="preview-title">数据预览</h2></div><div id="preview-table" class="table-wrap"><p class="muted table-empty">选择一个数据集查看内容。</p></div></article>
       <article class="panel instructions"><h2>SQL 查询</h2><p>选择数据集后会生成查询示例。所有字段按文本导入；计算金额时可用 <code>CAST(字段 AS REAL)</code>。</p><label for="sql" class="sr-only">SQL 查询语句</label><textarea id="sql" spellcheck="false" placeholder="SELECT * FROM 数据集表名 LIMIT 50"></textarea><div class="actions"><button id="run-query" class="button primary">运行查询</button><span id="query-status" class="muted">只读查询 · 最多显示 200 行 · 3 秒超时</span></div><div id="query-table" class="table-wrap"></div></article>
     </section>
+    <dialog id="auth-dialog"><h2 id="auth-title">登录数据中台</h2><form id="auth-form"><label>账号<input id="auth-username" autocomplete="username" required maxlength="100"></label><label>密码<input id="auth-password" type="password" autocomplete="current-password" required minlength="12" maxlength="200"></label><button type="submit" class="button primary">继续</button><p id="auth-error" role="alert"></p></form></dialog>
     <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
   </main>
 </body>

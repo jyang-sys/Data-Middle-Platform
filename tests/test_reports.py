@@ -185,7 +185,9 @@ class ReportTests(unittest.TestCase):
         response = self.client.get('/api/reports/export', params=self.params)
         self.assertEqual(response.status_code, 200)
         wb = load_workbook(io.BytesIO(response.content))
-        self.assertEqual(len(wb.sheetnames), 7)
+        self.assertEqual(len(wb.sheetnames), 10)
+        for name in ['平台店铺对比', '产品店铺对比', '小组人员对比']:
+            self.assertEqual(sum(r[3] for r in list(wb[name].values)[1:]), 15)
         for name in ['按平台汇总', '按型号汇总']:
             rows = list(wb[name].values)[1:]
             self.assertEqual(sum(r[3] for r in rows), 15)
