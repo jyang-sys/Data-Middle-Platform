@@ -277,6 +277,7 @@ def sync_inventory(job_id):
 def save_order_page(db, orders, timestamp):
     for order in orders:
         order_id = int(order["order_id"])
+        existing_order = db.execute('SELECT 1 FROM base_orders WHERE order_id=?', (order_id,)).fetchone()
         if order_id <= 0:
             raise ValueError("invalid order id")
         products = order.get("products")
@@ -301,6 +302,9 @@ def save_order_page(db, orders, timestamp):
                        (order_id, position, product.get("order_product_id"), product.get("storage"),
                         product.get("storage_id"), product.get("product_id"), product.get("variant_id"),
                         product.get("sku"), str(amount(product["quantity"])), encode(product)))
+        if not existing_order and db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='sales_assignment_rules'").fetchone():
+            from app.performance import assign_new_order
+            assign_new_order(db, order_id)
 
 
 def sync_orders(job_id):
@@ -331,6 +335,12 @@ SYNC_FUNCTIONS = {"shops": sync_shops, "products": sync_products,
 
 
 def run_sync(domain):
+    from app.main import database
+    with database() as db:
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='app_metadata'").fetchone():
+            mode = db.execute("SELECT value FROM app_metadata WHERE key='data_mode'").fetchone()
+            if mode and mode['value'] == 'synthetic':
+                raise HTTPException(409, '本地演示数据库禁止同步真实 Base 数据，请使用独立业务数据库。')
     with sync_job(domain) as job_id:
         SYNC_FUNCTIONS[domain](job_id)
     return job_id

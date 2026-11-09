@@ -88,15 +88,20 @@ def reference(db, table, value, active=True):
 def groups():
     from app.main import database
     with database() as db:
-        return [dict(row) for row in db.execute("SELECT * FROM business_groups ORDER BY id")]
+        from app.access import principal, privileged
+        user = principal.get()
+        return [dict(row) for row in db.execute("SELECT * FROM business_groups ORDER BY id") if privileged() or row['id'] == user['group_id']]
 
 
 @router.get("/employees")
 def employees():
     from app.main import database
     with database() as db:
+        from app.access import principal, privileged
+        user = principal.get()
         return [dict(row) for row in db.execute("""SELECT e.*, g.name AS group_name FROM employees e
-            LEFT JOIN business_groups g ON g.id=e.group_id ORDER BY e.id""")]
+            LEFT JOIN business_groups g ON g.id=e.group_id ORDER BY e.id""") if privileged() or
+            (row['group_id'] == user['group_id'] if user['role'] == 'manager' else row['id'] == user['employee_id'])]
 
 
 def save_organization(table, body, entity_id=None):
@@ -235,6 +240,10 @@ def resolve_ownership(db, before, changes):
 
 
 def record_history(db, kind, key, before, after, actor, reason, batch_id):
+    from app.access import principal
+    user = principal.get()
+    if user is not None:
+        actor = str(user['id']) + ':' + user['name']
     db.execute("""INSERT INTO ownership_history(entity_type,entity_key,batch_id,actor,reason,
         before_json,after_json,created_at) VALUES(?,?,?,?,?,?,?,?)""",
                (kind, key, batch_id, actor, reason, encode(before), encode(after), now()))

@@ -23,13 +23,18 @@ def capture(base_url):
             value = json.load(response)
         responses[canonical(path)] = value
         return value
+    session = get('/api/auth/session')
     options = get('/api/reports/options')
     get('/api/management/groups')
     get('/api/management/employees')
+    get('/api/performance/rules')
+    get('/api/catalog/products')
+    get('/api/catalog/links')
+    get('/api/allocations/view')
     latest = options['order_dates']['last_confirmed_created'] or options['order_dates']['last_created']
     end = datetime.fromtimestamp(latest, ZoneInfo('Asia/Shanghai')).date() if latest else datetime.now(ZoneInfo('Asia/Shanghai')).date()
     filters = {'start': (end-timedelta(days=13)).isoformat(), 'end': end.isoformat(), 'timezone': 'Asia/Shanghai',
-               'date_basis': 'base_created', 'confirmed_only': 'true', 'granularity': 'source_product'}
+               'date_basis': 'base_created', 'ownership_basis': 'saved', 'confirmed_only': 'true', 'granularity': 'company_product'}
     query = urlencode(filters)
     report = get('/api/reports/sales?' + query)
     scopes = [{}] + [{'month': row['month'], 'key_json': json.dumps(row['key'], ensure_ascii=False, separators=(',', ':'))} for row in report['monthly']]
@@ -46,21 +51,21 @@ def capture(base_url):
         stock = get('/api/stock-dashboard/summary?' + urlencode(params))
         for offset in range(50, stock['total_rows'], 50):
             get('/api/stock-dashboard/summary?' + urlencode({**params, 'offset': offset}))
-    return {'filters': filters, 'captured_at': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(), 'responses': responses}
+    return {'filters': filters, 'data_mode': session.get('data_mode', 'base'), 'captured_at': datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(), 'responses': responses}
 
 
 def build(destination, live_url=None):
     static = ROOT / 'app' / 'static'
     html = (static / 'index.html').read_text()
-    for asset in ('style.css', 'management.css', 'reports.css', 'inventory.css'):
+    for asset in ('style.css', 'management.css', 'reports.css', 'inventory.css', 'business.css'):
         css = (static / asset).read_text()
         html = html.replace(f'<link rel="stylesheet" href="./{asset}">', f'<style>{css}</style>')
-    for asset in ('app.js', 'management.js', 'reports.js', 'inventory.js'):
+    for asset in ('auth.js', 'app.js', 'management.js', 'reports.js', 'inventory.js', 'performance.js'):
         html = html.replace(f'<script src="./{asset}" defer></script>', '')
     snapshot = capture(live_url) if live_url else None
     data = json.dumps(snapshot, ensure_ascii=True).replace('<', r'\u003c') if snapshot else 'null'
     scripts = '<script>window.__STATIC_PREVIEW__ = true;window.__DATA_SNAPSHOT__ = ' + data + ';</script>\n'
-    for asset in ('app.js', 'management.js', 'reports.js', 'inventory.js'):
+    for asset in ('auth.js', 'app.js', 'management.js', 'reports.js', 'inventory.js', 'performance.js'):
         # Inline source must not close its HTML script element prematurely.
         code = re.sub(r'</script', r'<\\/script', (static / asset).read_text(), flags=re.I)
         scripts += f'<script>{code}</script>\n'
@@ -71,6 +76,8 @@ def build(destination, live_url=None):
     if snapshot:
         html = html.replace('界面预览未连接数据服务。此处可查看页面布局；真实数据查询与维护需通过已启动的中台服务打开。', '真实系统只读快照 · ' + snapshot['captured_at'] + '。显示最近有已确认订单的 14 天；筛选、同步和保存请打开运行中的中台服务。')
         html = html.replace('<title>数据中台界面预览</title>', '<title>数据中台 · 真实系统数据快照</title>')
+        if snapshot['data_mode'] == 'synthetic':
+            html = html.replace('真实系统只读快照', '本地演示数据只读快照').replace('真实系统数据快照', '本地演示数据快照')
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(html)
     print(destination)

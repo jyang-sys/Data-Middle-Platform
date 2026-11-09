@@ -6,3 +6,5 @@ node --check app/static/app.js
 node --check app/static/management.js
 node --check app/static/reports.js
 node --check app/static/inventory.js
+node --check app/static/performance.js
+node --check app/static/auth.js
