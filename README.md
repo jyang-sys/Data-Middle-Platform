@@ -142,6 +142,14 @@ python3 scripts/build-preview.py
 
 打开生成的 `preview.html`。它内嵌当前页面的全部 CSS 和 JavaScript，可查看销量试算报表、旧版销售分析、中台基础数据、员工与归属等界面布局，无需额外静态资源服务。该文件不含真实订单或密钥，并明确标注未连接数据服务；查询和保存业务数据仍需通过运行中的 Web 服务操作。修改 UI 后重新生成预览即可。
 
+需要拷到其他电脑双击查看时，分发完整独立文件或 ZIP，不能单独拷贝 `app/static/index.html`。例如为本地演示生成带数据的离线包：
+
+```bash
+.venv/bin/python scripts/build-preview.py --live-url http://127.0.0.1:8000 --output data/exports/dashboard.html --bundle data/exports/dashboard.zip
+```
+
+解压 ZIP 后双击其中的 `index.html`。包内已内嵌样式、脚本及快照，不依赖后台查询；属于只读快照，不能同步或保存业务修改。生成器发现残留外部样式/脚本时会停止分发。数据快照和 ZIP 不提交 Git。
+
 生成可展开明细的真实数据只读快照（服务需已启动）：
 
 ```bash
