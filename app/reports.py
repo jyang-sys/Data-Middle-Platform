@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS sales_mapping_history (
 """
 PLATFORM_NAMES = {'amazon': '亚马逊', 'ebay': 'eBay', 'tiktok': 'TikTok', 'shop': '独立站',
                   'walmart': '沃尔玛', 'allegro': 'Allegro', 'temu': 'TEMU', 'shein': 'SHEIN',
-                  'cdiscount': 'CD', 'worten': 'WORTEN', 'debenhams': 'Debenhams'}
+                  'personal': '手工来源', 'order_return': '退货来源', 'cdiscount': 'CD', 'worten': 'WORTEN', 'debenhams': 'Debenhams'}
 
 
 def initialize_storage():

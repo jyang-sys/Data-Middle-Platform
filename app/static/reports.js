@@ -150,6 +150,7 @@ $('mapping-next').addEventListener('click', () => loadReportMappings(reportState
 recentReportDays(7);
 if (window.__DATA_SNAPSHOT__) {
   const f = window.__DATA_SNAPSHOT__.filters; $('report-start').value = f.start; $('report-end').value = f.end; $('report-granularity').value = f.granularity;
+  $('report-confirmed').checked = f.confirmed_only !== false && f.confirmed_only !== 'false';
   for (const id of ['report-timezone','report-date-basis','report-ownership']) $(id).disabled = true;
 }
 loadReportOptions().then(() => {

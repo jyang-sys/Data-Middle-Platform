@@ -10,3 +10,5 @@ node --check app/static/performance.js
 node --check app/static/auth.js
 node --check app/static/dashboard.js
 node --check app/static/snapshot-reports.js
+node --check app/static/base-test-bootstrap.js
+node scripts/check-base-test-worker.mjs

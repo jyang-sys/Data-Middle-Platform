@@ -55,6 +55,21 @@ function renderSalesHome(data) {
       : "销量试算";
   $("home-source-label").title =
     "按商品件数统计；取消、退款、退货的最终扣减规则待确认";
+  if (
+    window.__DATA_SNAPSHOT__?.data_mode === "base_test" ||
+    window.appDataMode === "base_test"
+  ) {
+    $("home-source-label").textContent = "Base 测试数据 · 试算";
+    const timestamp = window.__DATA_SNAPSHOT__?.captured_at || data.last_sync;
+    if (timestamp)
+      $("home-period-label").textContent +=
+        " · 同步 " +
+        new Date(timestamp).toLocaleTimeString("zh-CN", {
+          timeZone: "Asia/Shanghai",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+  }
   $("home-units-foot").textContent =
     "日均 " + number(data.total_units / Math.max(1, data.daily.length)) + " 件";
   $("home-orders-foot").textContent =
@@ -62,7 +77,7 @@ function renderSalesHome(data) {
     number(data.order_count ? data.total_units / data.order_count : 0) +
     " 件";
   $("home-products-foot").textContent =
-    "覆盖 " + (comparisons?.hierarchy?.length || 0) + " 个产品父体";
+    "覆盖 " + (comparisons?.hierarchy?.length || 0) + " 个顶层产品";
   $("home-shops-foot").textContent =
     "覆盖 " + data.platforms.length + " 个平台";
   $("home-spark-orders").replaceChildren(
@@ -658,6 +673,8 @@ function mountHomeInteractions() {
   });
   $("home-reset").addEventListener("click", () => {
     $("report-form").reset();
+    if (window.__DATA_SNAPSHOT__?.data_mode === "base_test")
+      $("report-confirmed").checked = false;
     recentReportDays(window.__DATA_SNAPSHOT__ ? 14 : 7);
     reportShopOptions();
     homeState.trend = "all";
@@ -667,6 +684,12 @@ function mountHomeInteractions() {
     const b = $("home-refresh");
     b.disabled = true;
     try {
+      if (window.refreshBaseTestSnapshot) {
+        await window.refreshBaseTestSnapshot();
+        await loadReportOptions();
+        await loadBusinessOptions();
+        stockState.data = stockState.options = null;
+      }
       await refreshSalesReport();
     } catch (e) {
       notice(e.message, true);
