@@ -11,7 +11,7 @@ export async function handleShopSettings(request, env, scope, sources) {
       const config = row ? JSON.parse(row.payload) : {groups:[],assignments:[]};
       const sourceKeys = new Set(shops.map(key));
       const retired = config.assignments.filter(s=>!sourceKeys.has(key(s))).map(s=>({...s,active:false}));
-      return json({...config,shops:[...shops.map(s=>({...s,active:true})),...retired],revision:row?.revision||0,updated_at:row?.updated_at||null});
+      return json({...config,employees:config.employees||[],shops:[...shops.map(s=>({...s,active:true})),...retired],revision:row?.revision||0,updated_at:row?.updated_at||null});
     }
     const actor=request.headers.get('oai-authenticated-user-id');
     if (!actor) return json({detail:'请登录后维护店铺归属'},401);
@@ -33,17 +33,32 @@ export async function handleShopSettings(request, env, scope, sources) {
     const old=previous?JSON.parse(previous.payload):{groups:[],assignments:[]};
     // Current page supports creation/renaming, not silent deletion of groups.
     if(old.groups.some(g=>!groupIds.has(g.id)))return json({detail:'不能删除已有小组；可将店铺调整为其他小组或未分配'},422);
+    const employees=body.employees===undefined?(old.employees||[]):body.employees;
+    if(!Array.isArray(employees)||employees.length>2000)return json({detail:'人员配置无效，最多维护 2000 人'},422);
+    const people=[],peopleIds=new Set(),codes=new Set(),previousPeople=new Map((old.employees||[]).map(p=>[p.id,p]));
+    for(const p of employees){
+      const code=typeof p.code==='string'?p.code.trim():'',name=typeof p.name==='string'?p.name.trim():'';
+      if(typeof p.id!=='string'||!/^[a-zA-Z0-9_-]{1,80}$/.test(p.id)||peopleIds.has(p.id)||!code||code.length>40||!name||name.length>80||codes.has(code.toLowerCase())||typeof p.active!=='boolean'||!(p.group_id===null||groupIds.has(p.group_id)))return json({detail:'请检查人员编号、姓名、所属小组及状态；员工编号不能重复'},422);
+      if(previousPeople.has(p.id)&&previousPeople.get(p.id).code!==code)return json({detail:'已有员工编号不能修改，请保留原编号'},422);
+      peopleIds.add(p.id);codes.add(code.toLowerCase());people.push({id:p.id,code,name,group_id:p.group_id,active:p.active});
+    }
+    if((old.employees||[]).some(p=>!peopleIds.has(p.id)))return json({detail:'人员不能删除，请将离职人员设为停用'},422);
+    const peopleById=new Map(people.map(p=>[p.id,p]));
     const allowed=new Map(shops.map(s=>[key(s),s])),oldAssignments=new Map(old.assignments.map(s=>[key(s),s])),seen=new Set(),assignments=[];
     for(const s of body.assignments){
       if(typeof s.platform!=='string'||typeof s.shop_id!=='string'||s.platform.length>100||s.shop_id.length>100)return json({detail:'来源标识不正确'},422);
       const identity=key(s),source=allowed.get(identity),oldSource=oldAssignments.get(identity);
       if(seen.has(identity)||(!source&&!oldSource)||!(s.group_id===null||groupIds.has(s.group_id)))return json({detail:'店铺或销售小组无效，请刷新来源列表'},422);
       if(!source&&s.group_id!==oldSource.group_id)return json({detail:'已停用的来源只能保留原归属'},422);
-      seen.add(identity);assignments.push({platform:s.platform,shop_id:s.shop_id,name:source?.name||oldSource.name,group_id:s.group_id});
+      const employee_id=s.employee_id===undefined?(oldSource?.employee_id||null):s.employee_id;
+      const employee=peopleById.get(employee_id);
+      if(employee_id!==null&&(!employee||!employee.active||!s.group_id||employee.group_id!==s.group_id))return json({detail:'店铺负责人必须是在职且属于该销售小组的人员；调组或停用前请清空原店铺负责人'},422);
+      if(!source&&employee_id!==null&&employee_id!==(oldSource.employee_id||null))return json({detail:'已停用来源的负责人只能保留原配置'},422);
+      seen.add(identity);assignments.push({platform:s.platform,shop_id:s.shop_id,name:source?.name||oldSource.name,group_id:s.group_id,employee_id});
     }
     // Full-save must retain old sources, including stopped sources, to avoid accidental loss.
     if(old.assignments.some(s=>!seen.has(key(s))))return json({detail:'店铺配置不完整，请重新载入'},422);
-    const updated_at=new Date().toISOString(),payload=JSON.stringify({groups,assignments});
+    const updated_at=new Date().toISOString(),payload=JSON.stringify({groups,assignments,employees:people});
     const stmt=previous
       ?env.DB.prepare('UPDATE shop_settings SET payload=?,revision=revision+1,updated_at=?,updated_by=? WHERE scope=? AND revision=?').bind(payload,updated_at,actor,scope,body.revision)
       :env.DB.prepare('INSERT INTO shop_settings (scope,revision,payload,updated_at,updated_by) VALUES (?,1,?,?,?) ON CONFLICT(scope) DO NOTHING').bind(scope,payload,updated_at,actor);

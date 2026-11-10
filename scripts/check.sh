@@ -15,3 +15,4 @@ node scripts/check-base-test-worker.mjs
 node --check app/hosted/shop-settings.mjs
 node scripts/check-shop-settings.mjs
 node scripts/check-shop-sources.mjs
+node scripts/check-people-settings.mjs
