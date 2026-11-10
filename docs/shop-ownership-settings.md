@@ -15,3 +15,5 @@
 已有扩展演示站点使用 `scripts/install-shop-settings-site.py --site-directory <站点目录>` 集成，保留现有演示与 Base 两种模式及生成器。该安装器不替换演示数据；原单快照构建器会拒绝覆盖此类站点。
 
 本次校验中旧 FastAPI 全套测试在首个 TestClient 用例阻塞后停止；该部分代码未改动。受影响的 Worker、设置 SQL、页面浏览器和原扩展演示校验均通过。
+
+修复：线上 Sites 不允许访问 Cloudflare 默认缓存。Base 快照改存 D1，店铺独立同步使用 getOrderSources 并保存到 base_shop_sources；同步不覆盖已有归属。新增同步按钮及非 JSON 错误提示。回归测试模拟默认缓存访问必然抛错的运行环境，验证店铺读取、来源同步、失败保留及归属保留。

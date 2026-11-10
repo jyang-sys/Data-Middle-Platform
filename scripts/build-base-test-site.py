@@ -41,7 +41,7 @@ def build(snapshot_path,db_path,site_directory):
     position=html.index(marker,html.index('window.__DATA_SNAPSHOT__'))
     html=html[:position]+html[position:].replace(marker,';</script>\n<script>'+bootstrap+'</script>\n<script>',1)
     html=re.sub(r'(?m)^[\t ]+$','',html)
-    source=(ROOT/'app/hosted/base-test-worker.mjs').read_text().replace("import { handleShopSettings } from './shop-settings.mjs';",'')
+    source=(ROOT/'app/hosted/base-test-worker.mjs').read_text().replace("import { handleShopSettings, createSnapshotStore, readShopSources, syncShopSources } from './shop-settings.mjs';",'')
     settings=(ROOT/'app/hosted/shop-settings.mjs').read_text()
     settings_html=(ROOT/'app/hosted/shop-settings.html').read_text()
     worker='const REFERENCE = '+json.dumps(reference,ensure_ascii=True).replace('<',r'\u003c')+';\nconst INDEX_HTML = '+json.dumps(html,ensure_ascii=True).replace('<',r'\u003c')+';\nconst SETTINGS_HTML = '+json.dumps(settings_html,ensure_ascii=True).replace('<',r'\u003c')+';\n'+settings+'\n'+source+'\nexport default createHandler(REFERENCE, INDEX_HTML, {settingsHtml:SETTINGS_HTML});\n'

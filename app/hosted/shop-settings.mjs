@@ -52,3 +52,40 @@ export async function handleShopSettings(request, env, scope, sources) {
     return json({revision:body.revision+1,updated_at});
   }catch{return json({detail:'设置读取或保存失败，原配置保持不变，请稍后重试'},503);}
 }
+
+// Sites Workers do not expose Cloudflare's default cache. Use the declared D1 binding.
+export function createSnapshotStore(db) {
+  if(!db)return null;
+  const scope=key=>new URL(key.url).pathname;
+  return {
+    async match(key){const row=await db.prepare('SELECT payload FROM base_test_snapshots WHERE scope=?').bind(scope(key)).first();return row?Response.json(JSON.parse(row.payload)):undefined;},
+    async put(key,response){const payload=await response.text();await db.prepare('INSERT INTO base_test_snapshots (scope,payload,updated_at) VALUES (?,?,?) ON CONFLICT(scope) DO UPDATE SET payload=excluded.payload,updated_at=excluded.updated_at').bind(scope(key),payload,new Date().toISOString()).run();}
+  };
+}
+export async function readShopSources(db,scope){
+  return db?await db.prepare('SELECT payload,updated_at FROM base_shop_sources WHERE scope=?').bind(scope).first():null;
+}
+export async function syncShopSources(request,env,scope,transport=fetch){
+  const json=(data,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
+  if(request.method!=='POST')return json({detail:'请求方式不支持'},405);
+  if(!request.headers.get('oai-authenticated-user-id'))return json({detail:'请登录后同步店铺来源'},401);
+  if(request.headers.get('Origin')!==new URL(request.url).origin)return json({detail:'请从当前页面同步店铺'},403);
+  if(!env.DB)return json({detail:'设置存储尚未就绪'},503);
+  try{
+    const response=await transport('https://api.baselinker.com/connector.php',{method:'POST',headers:{'X-BLToken':env.BASELINKER_TEST_API_TOKEN,'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({method:'getOrderSources',parameters:'{}'}),signal:AbortSignal.timeout(35000)});
+    if(!response.ok)throw Error('upstream');
+    const result=await response.json();
+    if(result.status!=='SUCCESS'||!result.sources||typeof result.sources!=='object')throw Error('upstream');
+    const shops=[];
+    for(const [platform,entries] of Object.entries(result.sources)){
+      if(!entries||typeof entries!=='object')throw Error('invalid sources');
+      for(const [id,name] of Object.entries(entries)){
+        if(typeof name!=='string')throw Error('invalid shop');
+        shops.push({platform,shop_id:String(id),name});
+      }
+    }
+    const updated_at=new Date().toISOString();
+    await env.DB.prepare('INSERT INTO base_shop_sources (scope,payload,updated_at) VALUES (?,?,?) ON CONFLICT(scope) DO UPDATE SET payload=excluded.payload,updated_at=excluded.updated_at').bind(scope,JSON.stringify(shops),updated_at).run();
+    return json({count:shops.length,sources_synced_at:updated_at});
+  }catch{return json({detail:'Base 店铺同步失败，请检查接口权限或稍后重试；已有归属保留'},502);}
+}

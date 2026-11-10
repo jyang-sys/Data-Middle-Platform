@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import {DatabaseSync} from 'node:sqlite';
-import {readFileSync} from 'node:fs';
+import {readFileSync,readdirSync} from 'node:fs';
 import {handleShopSettings} from '../app/hosted/shop-settings.mjs';
 export function createTestDB(){
- const sqlite=new DatabaseSync(':memory:');sqlite.exec(readFileSync(new URL('../app/hosted/migrations/0000_shop_settings.sql',import.meta.url),'utf8'));
+ const sqlite=new DatabaseSync(':memory:');for(const file of readdirSync(new URL('../app/hosted/migrations/',import.meta.url)).filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync(new URL('../app/hosted/migrations/'+file,import.meta.url),'utf8'));
  const DB={prepare(sql){return {bind(...values){return {async first(){return sqlite.prepare(sql).get(...values)||null;},async run(){const r=sqlite.prepare(sql).run(...values);return {meta:{changes:Number(r.changes)}};}};}};}};
  return {DB,sqlite};
 }

@@ -11,15 +11,12 @@ def install(site):
     for name in ('shop-settings.mjs','shop-settings.html'):
         (site/'worker'/name).write_text((ROOT/'app/hosted'/name).read_text())
     target=site/'worker/base-reader.js'
-    source=target.read_text()
-    if "url.pathname === '/api/shop-settings'" not in source:
-        source=source.replace('{ transport = fetch, cache = globalThis.caches?.default, pause } = {},','{ transport = fetch, cache = globalThis.caches?.default, pause, settingsHtml = \'\' } = {},')
-        marker='      if (url.pathname === "/favicon.ico")'
-        actual=(ROOT/'app/hosted/base-test-worker.mjs').read_text()
-        routes=actual[actual.index("      if (url.pathname === '/settings/shops')"):actual.index('      if (\n        !["/api/base-test/snapshot"')]
-        if marker not in source:raise ValueError('Base 路由源代码已变化，请核对后集成。')
-        source=source.replace(marker,routes+marker,1)
-        target.write_text(source)
+    original=target.read_text()
+    actual=(ROOT/'app/hosted/base-test-worker.mjs').read_text()
+    # Replace only the request-handler tail; preserve the Site's Base ingestion implementation.
+    marker='let refreshInFlight = null;'
+    if marker not in original or marker not in actual:raise ValueError('Base 路由结构已变化，请核对后集成。')
+    target.write_text(original[:original.index(marker)]+actual[actual.index(marker):])
     generator=site/'scripts/expand-demo.py'
     source=generator.read_text()
     marker="reader=(ROOT/'worker/base-reader.js').read_text()"
