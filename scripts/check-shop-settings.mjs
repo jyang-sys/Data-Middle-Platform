@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {readFileSync,readdirSync} from 'node:fs';
+import {handleShopSettings} from '../app/hosted/shop-settings.mjs';
+export function createTestDB(){
+ const sqlite=new DatabaseSync(':memory:');for(const file of readdirSync(new URL('../app/hosted/migrations/',import.meta.url)).filter(f=>f.endsWith('.sql')).sort())sqlite.exec(readFileSync(new URL('../app/hosted/migrations/'+file,import.meta.url),'utf8'));
+ const DB={prepare(sql){return {bind(...values){return {async first(){return sqlite.prepare(sql).get(...values)||null;},async run(){const r=sqlite.prepare(sql).run(...values);return {meta:{changes:Number(r.changes)}};}};}};}};
+ return {DB,sqlite};
+}
+const {DB,sqlite}=createTestDB(),env={DB},origin='https://fixture.test',scope='test-account';
+const sources=[{platform:'amazon',shop_id:'1',name:'德国店'},{platform:'ebay',shop_id:'1',name:'eBay 店'}];
+const req=(method='GET',body,headers={})=>new Request(origin+'/api/shop-settings',{method,headers:{Origin:origin,'oai-authenticated-user-id':'fixture-owner',...headers},...(body?{body:JSON.stringify(body)}:{})});
+const call=(request,s=sources)=>handleShopSettings(request,env,scope,s);
+const initial=await (await call(req())).json();assert.equal(initial.revision,0);assert.equal(initial.shops.length,2);
+const config={revision:0,groups:[{id:'group-a',name:'欧洲一组'}],assignments:sources.map((s,i)=>({...s,group_id:i===0?'group-a':null}))};
+assert.equal((await call(req('PUT',config))).status,200);
+const fresh=await (await call(req())).json();assert.equal(fresh.revision,1);assert.equal(fresh.assignments[0].group_id,'group-a');
+assert.equal((await call(req('PUT',config))).status,409);
+assert.equal((await call(req('PUT',{...config,revision:1},{Origin:'https://evil.test'}))).status,403);
+assert.equal((await call(req('PUT',{...config,revision:1},{'oai-authenticated-user-id':''}))).status,401);
+assert.equal((await call(req('PUT',{...config,revision:1,groups:[...config.groups,{id:'dup',name:'欧洲一组'}]}))).status,422);
+assert.equal((await call(req('PUT',{...config,revision:1,assignments:[{platform:'unknown',shop_id:'1',group_id:'group-a'}]}))).status,422);
+assert.equal((await call(req('PUT',{...config,revision:1,groups:[]}))).status,422);
+const renamed=[{...sources[0],name:'德国新名称'},sources[1]];
+const second=await (await call(req(),renamed)).json();assert.equal(second.shops[0].name,'德国新名称');assert.equal(second.assignments[0].group_id,'group-a');
+const changed={...config,revision:1,groups:[{id:'group-a',name:'欧洲团队'}],assignments:config.assignments.map(s=>({...s,group_id:null}))};
+assert.equal((await call(req('PUT',changed),renamed)).status,200);
+assert.equal((await (await call(req())).json()).groups[0].name,'欧洲团队');
+const retired=await (await call(req(),[sources[1]])).json();assert.equal(retired.shops.find(s=>s.platform==='amazon').active,false);
+const other=await (await handleShopSettings(req(),env,'other-account',sources)).json();assert.equal(other.groups.length,0);
+const simultaneous={...changed,revision:2};const race=await Promise.all([call(req('PUT',simultaneous)),call(req('PUT',simultaneous))]);assert.deepEqual(race.map(r=>r.status).sort(),[200,409]);
+const final=await (await call(req())).json();assert.equal(final.revision,3);assert.equal(final.groups[0].name,'欧洲团队');
+sqlite.close();
+console.log(JSON.stringify({persistentRead:true,sourceIdentity:true,rename:true,clearAssignment:true,concurrentSave:true,sourceIsolation:true,origin:true,identity:true,validation:true}));

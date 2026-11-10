@@ -1,4 +1,5 @@
 // Read-only Base adapter for the owner-private test Site. No upstream write methods.
+import { handleShopSettings, createSnapshotStore, readShopSources, syncShopSources } from './shop-settings.mjs';
 const READ_METHODS = new Set([
   "getOrderSources",
   "getInventories",
@@ -613,7 +614,7 @@ let refreshInFlight = null;
 export function createHandler(
   reference,
   html,
-  { transport = fetch, cache = globalThis.caches?.default, pause } = {},
+  { transport = fetch, cache, pause, settingsHtml = '' } = {},
 ) {
   async function cacheKey(request, env) {
     const hash = await crypto.subtle.digest(
@@ -629,6 +630,7 @@ export function createHandler(
   }
   return {
     async fetch(request, env, ctx) {
+      const storage = cache || createSnapshotStore(env.DB);
       const url = new URL(request.url),
         json = (body, status = 200) =>
           Response.json(body, {
@@ -644,6 +646,23 @@ export function createHandler(
         });
       if (url.pathname === "/favicon.ico")
         return new Response(null, { status: 204 });
+      if (url.pathname === '/settings/shops')
+        return new Response(settingsHtml, {headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
+      if (['/api/shop-settings','/api/shop-settings/sync'].includes(url.pathname)) {
+        try {
+        if (!env.BASELINKER_TEST_API_TOKEN) return json({detail:'服务端尚未配置测试密钥'},503);
+        const key = await cacheKey(request, env);
+        const scope = new URL(key.url).pathname;
+        if(url.pathname.endsWith('/sync'))return syncShopSources(request,env,scope,transport);
+        const sources = await readShopSources(env.DB,scope);
+        const cached = sources ? null : await storage?.match(key);
+        const snapshot = cached ? await cached.json() : reference.snapshot;
+        const shops = sources ? JSON.parse(sources.payload) : snapshot.responses?.['/api/reports/options']?.shops || [];
+        const response = await handleShopSettings(request, env, scope, shops);
+        if(request.method==='GET' && response.ok){const result=await response.json();return json({...result,sources_synced_at:sources?.updated_at||null});}
+        return response;
+        }catch{return json({detail:'店铺数据暂时无法读取，请稍后重试'},503);}
+      }
       if (
         !["/api/base-test/snapshot", "/api/base-test/refresh"].includes(
           url.pathname,
@@ -663,8 +682,10 @@ export function createHandler(
         return json({ detail: "服务端尚未配置测试密钥" }, 503);
       const key = await cacheKey(request, env);
       if (!refreshing) {
-        const cached = await cache?.match(key);
+        try {
+        const cached = await storage?.match(key);
         return cached ? json(await cached.json()) : json(reference.snapshot);
+        }catch{return json({detail:"暂时无法读取上次同步数据，请稍后重试"},503);}
       }
       try {
         if (!refreshInFlight) {
@@ -677,8 +698,8 @@ export function createHandler(
             .finally(() => (refreshInFlight = null));
         }
         const snapshot = await refreshInFlight;
-        if (cache)
-          await cache.put(
+        if (storage)
+          await storage.put(
             key,
             new Response(JSON.stringify(snapshot), {
               headers: {
