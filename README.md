@@ -165,3 +165,5 @@ python3 scripts/build-preview.py --live-url http://127.0.0.1:8000
 店铺默认销售小组的在线维护参见 [店铺归属设置](docs/shop-ownership-settings.md)。
 
 销售人员与店铺默认负责人的维护参见 [销售人员管理](docs/sales-people-settings.md)。
+
+同店不同产品的运营分工参见 [店铺产品负责人](docs/shop-product-owners.md)。

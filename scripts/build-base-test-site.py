@@ -45,7 +45,8 @@ def build(snapshot_path,db_path,site_directory):
     settings=(ROOT/'app/hosted/shop-settings.mjs').read_text()
     settings_html=(ROOT/'app/hosted/shop-settings.html').read_text()
     people_html=(ROOT/'app/hosted/people-settings.html').read_text()
-    worker='const REFERENCE = '+json.dumps(reference,ensure_ascii=True).replace('<',r'\u003c')+';\nconst INDEX_HTML = '+json.dumps(html,ensure_ascii=True).replace('<',r'\u003c')+';\nconst SETTINGS_HTML = '+json.dumps(settings_html,ensure_ascii=True).replace('<',r'\u003c')+';\nconst PEOPLE_HTML = '+json.dumps(people_html,ensure_ascii=True).replace('<',r'\u003c')+';\n'+settings+'\n'+source+'\nexport default createHandler(REFERENCE, INDEX_HTML, {settingsHtml:SETTINGS_HTML,peopleHtml:PEOPLE_HTML});\n'
+    product_owners_html=(ROOT/'app/hosted/product-owners.html').read_text()
+    worker='const REFERENCE = '+json.dumps(reference,ensure_ascii=True).replace('<',r'\u003c')+';\nconst INDEX_HTML = '+json.dumps(html,ensure_ascii=True).replace('<',r'\u003c')+';\nconst SETTINGS_HTML = '+json.dumps(settings_html,ensure_ascii=True).replace('<',r'\u003c')+';\nconst PEOPLE_HTML = '+json.dumps(people_html,ensure_ascii=True).replace('<',r'\u003c')+';\nconst PRODUCT_OWNERS_HTML = '+json.dumps(product_owners_html,ensure_ascii=True).replace('<',r'\u003c')+';\n'+settings+'\n'+source+'\nexport default createHandler(REFERENCE, INDEX_HTML, {settingsHtml:SETTINGS_HTML,peopleHtml:PEOPLE_HTML,productOwnersHtml:PRODUCT_OWNERS_HTML});\n'
     # Runtime values are intentionally read from env, never from this package.
     config_path=db_path.parent/'runtime.json'
     if config_path.exists():
