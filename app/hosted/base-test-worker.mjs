@@ -614,7 +614,7 @@ let refreshInFlight = null;
 export function createHandler(
   reference,
   html,
-  { transport = fetch, cache, pause, settingsHtml = '' } = {},
+  { transport = fetch, cache, pause, settingsHtml = '', peopleHtml = '' } = {},
 ) {
   async function cacheKey(request, env) {
     const hash = await crypto.subtle.digest(
@@ -646,6 +646,8 @@ export function createHandler(
         });
       if (url.pathname === "/favicon.ico")
         return new Response(null, { status: 204 });
+      if (url.pathname === '/settings/people')
+        return new Response(peopleHtml, {headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
       if (url.pathname === '/settings/shops')
         return new Response(settingsHtml, {headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
       if (['/api/shop-settings','/api/shop-settings/sync'].includes(url.pathname)) {

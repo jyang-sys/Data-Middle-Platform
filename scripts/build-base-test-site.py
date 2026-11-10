@@ -44,7 +44,8 @@ def build(snapshot_path,db_path,site_directory):
     source=(ROOT/'app/hosted/base-test-worker.mjs').read_text().replace("import { handleShopSettings, createSnapshotStore, readShopSources, syncShopSources } from './shop-settings.mjs';",'')
     settings=(ROOT/'app/hosted/shop-settings.mjs').read_text()
     settings_html=(ROOT/'app/hosted/shop-settings.html').read_text()
-    worker='const REFERENCE = '+json.dumps(reference,ensure_ascii=True).replace('<',r'\u003c')+';\nconst INDEX_HTML = '+json.dumps(html,ensure_ascii=True).replace('<',r'\u003c')+';\nconst SETTINGS_HTML = '+json.dumps(settings_html,ensure_ascii=True).replace('<',r'\u003c')+';\n'+settings+'\n'+source+'\nexport default createHandler(REFERENCE, INDEX_HTML, {settingsHtml:SETTINGS_HTML});\n'
+    people_html=(ROOT/'app/hosted/people-settings.html').read_text()
+    worker='const REFERENCE = '+json.dumps(reference,ensure_ascii=True).replace('<',r'\u003c')+';\nconst INDEX_HTML = '+json.dumps(html,ensure_ascii=True).replace('<',r'\u003c')+';\nconst SETTINGS_HTML = '+json.dumps(settings_html,ensure_ascii=True).replace('<',r'\u003c')+';\nconst PEOPLE_HTML = '+json.dumps(people_html,ensure_ascii=True).replace('<',r'\u003c')+';\n'+settings+'\n'+source+'\nexport default createHandler(REFERENCE, INDEX_HTML, {settingsHtml:SETTINGS_HTML,peopleHtml:PEOPLE_HTML});\n'
     # Runtime values are intentionally read from env, never from this package.
     config_path=db_path.parent/'runtime.json'
     if config_path.exists():
