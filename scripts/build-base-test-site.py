@@ -10,6 +10,7 @@ ROOT=Path(__file__).resolve().parent.parent
 
 
 def build(snapshot_path,db_path,site_directory):
+    if (site_directory/'scripts/expand-demo.py').exists():raise ValueError('该站点已有扩展演示，请使用 install-shop-settings-site.py 保留现有两种数据模式。')
     manifest_path=site_directory/'.openai/hosting.json'
     manifest=json.loads(manifest_path.read_text())
     if not manifest.get('project_id'):raise ValueError('请使用现有私有 Site，不创建或替换站点身份。')
@@ -34,13 +35,16 @@ def build(snapshot_path,db_path,site_directory):
     html=re.sub(r'<title>.*?</title>','<title>销售与库存中台 · Base 测试环境</title>',html,count=1)
     html=html.replace('<style>','<style>body [data-admin]{display:none!important}',1)
     html=html.replace('<button id="account-button" class="button">账号</button>','<span class="home-pill">Base 测试环境</span>').replace('本地开发版','测试环境')
+    html=html.replace('<div class="sidebar-bottom">','<a class="nav" href="/settings/shops" style="text-decoration:none">⚙ <span>店铺归属设置</span></a><div class="sidebar-bottom">',1)
     bootstrap=(ROOT/'app/static/base-test-bootstrap.js').read_text()
     marker=';</script>\n<script>'
     position=html.index(marker,html.index('window.__DATA_SNAPSHOT__'))
     html=html[:position]+html[position:].replace(marker,';</script>\n<script>'+bootstrap+'</script>\n<script>',1)
     html=re.sub(r'(?m)^[\t ]+$','',html)
-    source=(ROOT/'app/hosted/base-test-worker.mjs').read_text()
-    worker='const REFERENCE = '+json.dumps(reference,ensure_ascii=True).replace('<',r'\u003c')+';\nconst INDEX_HTML = '+json.dumps(html,ensure_ascii=True).replace('<',r'\u003c')+';\n'+source+'\nexport default createHandler(REFERENCE, INDEX_HTML);\n'
+    source=(ROOT/'app/hosted/base-test-worker.mjs').read_text().replace("import { handleShopSettings } from './shop-settings.mjs';",'')
+    settings=(ROOT/'app/hosted/shop-settings.mjs').read_text()
+    settings_html=(ROOT/'app/hosted/shop-settings.html').read_text()
+    worker='const REFERENCE = '+json.dumps(reference,ensure_ascii=True).replace('<',r'\u003c')+';\nconst INDEX_HTML = '+json.dumps(html,ensure_ascii=True).replace('<',r'\u003c')+';\nconst SETTINGS_HTML = '+json.dumps(settings_html,ensure_ascii=True).replace('<',r'\u003c')+';\n'+settings+'\n'+source+'\nexport default createHandler(REFERENCE, INDEX_HTML, {settingsHtml:SETTINGS_HTML});\n'
     # Runtime values are intentionally read from env, never from this package.
     config_path=db_path.parent/'runtime.json'
     if config_path.exists():
@@ -51,6 +55,13 @@ def build(snapshot_path,db_path,site_directory):
     (site_directory/'dist/server').mkdir(parents=True,exist_ok=True)
     (site_directory/'dist/server/index.js').write_text(worker)
     manifest.pop('static',None)
+    manifest['d1']='DB'
+    migrations=site_directory/'drizzle'
+    migrations.mkdir(exist_ok=True)
+    for migration in (ROOT/'app/hosted/migrations').glob('*.sql'):
+        target=migrations/migration.name
+        if target.exists() and target.read_text()!=migration.read_text():raise ValueError('不能修改已发布的迁移文件。')
+        target.write_text(migration.read_text())
     temporary=manifest_path.with_suffix('.tmp')
     temporary.write_text(json.dumps(manifest,indent=2)+'\n');os.replace(temporary,manifest_path)
     print(json.dumps({'project_id':manifest['project_id'],'worker_bytes':len(worker.encode()),'secret_embedded':False}))

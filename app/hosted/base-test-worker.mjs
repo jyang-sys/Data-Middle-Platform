@@ -1,4 +1,5 @@
 // Read-only Base adapter for the owner-private test Site. No upstream write methods.
+import { handleShopSettings } from './shop-settings.mjs';
 const READ_METHODS = new Set([
   "getOrderSources",
   "getInventories",
@@ -613,7 +614,7 @@ let refreshInFlight = null;
 export function createHandler(
   reference,
   html,
-  { transport = fetch, cache = globalThis.caches?.default, pause } = {},
+  { transport = fetch, cache = globalThis.caches?.default, pause, settingsHtml = '' } = {},
 ) {
   async function cacheKey(request, env) {
     const hash = await crypto.subtle.digest(
@@ -644,6 +645,16 @@ export function createHandler(
         });
       if (url.pathname === "/favicon.ico")
         return new Response(null, { status: 204 });
+      if (url.pathname === '/settings/shops')
+        return new Response(settingsHtml, {headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
+      if (url.pathname === '/api/shop-settings') {
+        if (!env.BASELINKER_TEST_API_TOKEN) return json({detail:'服务端尚未配置测试密钥'},503);
+        const key = await cacheKey(request, env);
+        const cached = await cache?.match(key);
+        const snapshot = cached ? await cached.json() : reference.snapshot;
+        const shops = snapshot.responses?.['/api/reports/options']?.shops || [];
+        return handleShopSettings(request, env, new URL(key.url).pathname, shops);
+      }
       if (
         !["/api/base-test/snapshot", "/api/base-test/refresh"].includes(
           url.pathname,
