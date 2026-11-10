@@ -8,7 +8,7 @@ ROOT=Path(__file__).resolve().parent.parent
 
 def install(site):
     if not (site/'scripts/expand-demo.py').exists():raise ValueError('需要已有的扩展演示 Site，不能覆盖其他站点源代码。')
-    for name in ('shop-settings.mjs','shop-settings.html','people-settings.html'):
+    for name in ('shop-settings.mjs','shop-settings.html','people-settings.html','product-owners.html'):
         (site/'worker'/name).write_text((ROOT/'app/hosted'/name).read_text())
     target=site/'worker/base-reader.js'
     original=target.read_text()
@@ -33,6 +33,12 @@ basehtml=html''',1)
         source=source.replace("js((ROOT/'worker/shop-settings.html').read_text())+';\\n'+reader", "js((ROOT/'worker/shop-settings.html').read_text())+';\\nconst PEOPLE_HTML='+js((ROOT/'worker/people-settings.html').read_text())+';\\n'+reader")
         source=source.replace('{settingsHtml:SETTINGS_HTML}', '{settingsHtml:SETTINGS_HTML,peopleHtml:PEOPLE_HTML}')
         source=source.replace('basehtml=html', "if '/settings/people' not in html:\n    html=html.replace('<div class=\"sidebar-bottom\">','<a class=\"nav\" href=\"/settings/people\" style=\"text-decoration:none\">♧ <span>销售人员管理</span></a><div class=\"sidebar-bottom\">',1)\nbasehtml=html",1)
+        generator.write_text(source)
+    source=generator.read_text()
+    if 'const PRODUCT_OWNERS_HTML=' not in source:
+        source=source.replace("js((ROOT/'worker/people-settings.html').read_text())+';\\n'+reader", "js((ROOT/'worker/people-settings.html').read_text())+';\\nconst PRODUCT_OWNERS_HTML='+js((ROOT/'worker/product-owners.html').read_text())+';\\n'+reader")
+        source=source.replace('peopleHtml:PEOPLE_HTML}', 'peopleHtml:PEOPLE_HTML,productOwnersHtml:PRODUCT_OWNERS_HTML}')
+        source=source.replace('basehtml=html', "if '/settings/product-owners' not in html:\n    html=html.replace('<div class=\"sidebar-bottom\">','<a class=\"nav\" href=\"/settings/product-owners\" style=\"text-decoration:none\">▦ <span>产品负责人</span></a><div class=\"sidebar-bottom\">',1)\nbasehtml=html",1)
         generator.write_text(source)
     manifest_path=site/'.openai/hosting.json'
     manifest=json.loads(manifest_path.read_text())

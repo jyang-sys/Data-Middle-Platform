@@ -614,7 +614,7 @@ let refreshInFlight = null;
 export function createHandler(
   reference,
   html,
-  { transport = fetch, cache, pause, settingsHtml = '', peopleHtml = '' } = {},
+  { transport = fetch, cache, pause, settingsHtml = '', peopleHtml = '', productOwnersHtml = '' } = {},
 ) {
   async function cacheKey(request, env) {
     const hash = await crypto.subtle.digest(
@@ -646,6 +646,8 @@ export function createHandler(
         });
       if (url.pathname === "/favicon.ico")
         return new Response(null, { status: 204 });
+      if (url.pathname === '/settings/product-owners')
+        return new Response(productOwnersHtml, {headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
       if (url.pathname === '/settings/people')
         return new Response(peopleHtml, {headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
       if (url.pathname === '/settings/shops')
@@ -657,10 +659,10 @@ export function createHandler(
         const scope = new URL(key.url).pathname;
         if(url.pathname.endsWith('/sync'))return syncShopSources(request,env,scope,transport);
         const sources = await readShopSources(env.DB,scope);
-        const cached = sources ? null : await storage?.match(key);
+        const cached = await storage?.match(key);
         const snapshot = cached ? await cached.json() : reference.snapshot;
         const shops = sources ? JSON.parse(sources.payload) : snapshot.responses?.['/api/reports/options']?.shops || [];
-        const response = await handleShopSettings(request, env, scope, shops);
+        const response = await handleShopSettings(request, env, scope, shops, snapshot.responses?.['/api/catalog/products']||[]);
         if(request.method==='GET' && response.ok){const result=await response.json();return json({...result,sources_synced_at:sources?.updated_at||null});}
         return response;
         }catch{return json({detail:'店铺数据暂时无法读取，请稍后重试'},503);}

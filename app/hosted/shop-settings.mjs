@@ -1,9 +1,10 @@
 // Business configuration lives in D1, isolated by source account; never in browser storage.
-export async function handleShopSettings(request, env, scope, sources) {
+export async function handleShopSettings(request, env, scope, sources, productNodes = []) {
   const json = (data, status = 200) => Response.json(data, {status, headers:{'Cache-Control':'no-store'}});
   if (!env.DB) return json({detail:'设置存储尚未就绪，请稍后重试'},503);
   if (!['GET','PUT'].includes(request.method)) return json({detail:'请求方式不支持'},405);
   const shops = [...new Map(sources.map(s=>[JSON.stringify([s.platform,String(s.shop_id)]), {...s, shop_id:String(s.shop_id)}])).values()];
+  const products=productNodes.filter(p=>p.kind==='sku').map(p=>({key:p.attributes?.base_product_key?'base:'+p.attributes.base_product_key:'company:'+p.code,code:p.code,name:p.name,source_sku:p.attributes?.source_sku||'',active:Boolean(p.active)}));
   const key = s => JSON.stringify([s.platform,String(s.shop_id)]);
   try {
     if (request.method==='GET') {
@@ -11,7 +12,7 @@ export async function handleShopSettings(request, env, scope, sources) {
       const config = row ? JSON.parse(row.payload) : {groups:[],assignments:[]};
       const sourceKeys = new Set(shops.map(key));
       const retired = config.assignments.filter(s=>!sourceKeys.has(key(s))).map(s=>({...s,active:false}));
-      return json({...config,employees:config.employees||[],shops:[...shops.map(s=>({...s,active:true})),...retired],revision:row?.revision||0,updated_at:row?.updated_at||null});
+      return json({...config,employees:config.employees||[],product_owners:config.product_owners||[],products,shops:[...shops.map(s=>({...s,active:true})),...retired],revision:row?.revision||0,updated_at:row?.updated_at||null});
     }
     const actor=request.headers.get('oai-authenticated-user-id');
     if (!actor) return json({detail:'请登录后维护店铺归属'},401);
@@ -58,7 +59,18 @@ export async function handleShopSettings(request, env, scope, sources) {
     }
     // Full-save must retain old sources, including stopped sources, to avoid accidental loss.
     if(old.assignments.some(s=>!seen.has(key(s))))return json({detail:'店铺配置不完整，请重新载入'},422);
-    const updated_at=new Date().toISOString(),payload=JSON.stringify({groups,assignments,employees:people});
+    const rawRules=body.product_owners===undefined?(old.product_owners||[]):body.product_owners;
+    if(!Array.isArray(rawRules)||rawRules.length>10000)return json({detail:'产品负责人配置无效，最多维护 10000 条'},422);
+    const ruleKey=r=>JSON.stringify([r.platform,r.shop_id,r.product_key]),productMap=new Map(products.map(p=>[p.key,p])),assignmentMap=new Map(assignments.map(a=>[key(a),a])),oldRules=new Map((old.product_owners||[]).map(r=>[ruleKey(r),r])),ruleKeys=new Set(),product_owners=[];
+    for(const r of rawRules){
+      if(!r||typeof r.platform!=='string'||typeof r.shop_id!=='string'||typeof r.product_key!=='string'||r.product_key.length>200||typeof r.employee_id!=='string')return json({detail:'产品负责人配置格式无效'},422);
+      const identity=ruleKey(r),shopKey=key(r),assignment=assignmentMap.get(shopKey),person=peopleById.get(r.employee_id),product=productMap.get(r.product_key),previousRule=oldRules.get(identity);
+      if(ruleKeys.has(identity))return json({detail:'同一店铺的同一规格只能配置一位负责人'},422);
+      if(!assignment?.group_id||!person?.active||person.group_id!==assignment.group_id)return json({detail:'产品负责人必须是在职且属于店铺销售小组的人员；调组或停用时请清理不匹配的产品归属'},422);
+      if((!allowed.has(shopKey)||!product?.active)&&(!previousRule||previousRule.employee_id!==r.employee_id))return json({detail:'店铺或产品已失效，请同步并重新核对；原配置可以移除'},422);
+      ruleKeys.add(identity);product_owners.push({platform:r.platform,shop_id:r.shop_id,product_key:r.product_key,employee_id:r.employee_id});
+    }
+    const updated_at=new Date().toISOString(),payload=JSON.stringify({groups,assignments,employees:people,product_owners});
     const stmt=previous
       ?env.DB.prepare('UPDATE shop_settings SET payload=?,revision=revision+1,updated_at=?,updated_by=? WHERE scope=? AND revision=?').bind(payload,updated_at,actor,scope,body.revision)
       :env.DB.prepare('INSERT INTO shop_settings (scope,revision,payload,updated_at,updated_by) VALUES (?,1,?,?,?) ON CONFLICT(scope) DO NOTHING').bind(scope,payload,updated_at,actor);
